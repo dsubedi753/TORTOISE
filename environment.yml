@@ -1,0 +1,32 @@
+name: tortoise
+channels:
+  - conda-forge
+  - pytorch
+  - defaults
+
+dependencies:
+  # Core Python
+  - python=3.10
+  - pip
+  
+  # Numeric & scientific stack
+  - numpy
+  - scipy
+  - pandas
+
+  # Geospatial / image IO
+  - rasterio           # important: installs GDAL correctly
+  - tifffile
+  - scikit-image
+
+  # Machine Learning (CPU PyTorch)
+  - pytorch::pytorch
+  - pytorch::torchvision
+  - pytorch::torchaudio
+
+  # Utilities
+  - pyyaml             # for config.yml
+  - matplotlib
+  - tqdm
+  - ipykernel
+  - jupyterlab
