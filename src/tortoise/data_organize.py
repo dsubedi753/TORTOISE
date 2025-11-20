@@ -8,18 +8,21 @@ Created on Wed Nov 19 23:54:05 2025
 import os
 import re
 import shutil
+from pathlib import Path
 
 # ============================
 # User-configurable paths
 # ============================
 
-DATA_FOLDER = r"/home/user" # Replace this with wherever you have your data
+DATA_FOLDER = r"/home/user/GeoCompassSegmentations" # Replace this with wherever you have your data
 
 TRAINING_IMAGE_FOLDER = os.path.join(DATA_FOLDER, "training_images_masked")
 SEGMENTATION_FOLDER  = os.path.join(DATA_FOLDER, "segmentations_masked")
 RGB_FOLDER           = os.path.join(DATA_FOLDER, "training_images_RGBs")
 
-OUTPUT_DATASET = os.path.join(DATA_FOLDER, "data")
+root = Path(__file__).resolve().parents[2]   # project root
+config_file = root / "configs" / "config.yml"
+OUTPUT_DATASET = root / "data"   # data folder
 
 # Ensure output directory exists
 os.makedirs(OUTPUT_DATASET, exist_ok=True)
