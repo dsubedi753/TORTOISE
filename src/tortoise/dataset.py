@@ -48,6 +48,8 @@ class TileDataset(Dataset):
                     "tile_size": int(row["height"])
                 })
 
+        self.tile_size = self.entries[0]["tile_size"]
+
         # ------------------------------------------------------------
         # Cache file paths per image_id
         # ------------------------------------------------------------
