@@ -100,16 +100,15 @@ class TileDataset(Dataset):
         if self.load_ms:
             with rasterio.open(self.ms_paths[image_id]) as src:
                 ms_tile = src.read(window=window)  # (C, H, W)
-            sample["ms"] = torch.from_numpy(ms_tile.copy()).float()
+            sample["ms"] = torch.from_numpy(ms_tile).float()
 
         # --------------------------------------------------------
         # RGB tile (from PNG)
         # --------------------------------------------------------
         if self.load_rgb:
             with rasterio.open(self.rgb_paths[image_id]) as src:
-                # Usually 3-band RGB → shape (3, H, W)
-                rgb = src.read(window=window)
-            sample["rgb"] = torch.from_numpy(rgb.copy()).float()
+                rgb = src.read(window=window) # (3, H, W)
+            sample["rgb"] = torch.from_numpy(rgb).float()
 
         # --------------------------------------------------------
         # Label tile
@@ -117,7 +116,7 @@ class TileDataset(Dataset):
         if self.load_label:
             with rasterio.open(self.label_paths[image_id]) as src:
                 lab_tile = src.read(1, window=window)  # (H, W)
-            sample["label"] = torch.from_numpy(lab_tile.copy()).long().unsqueeze(0)
+            sample["label"] = torch.from_numpy(lab_tile).long().unsqueeze(0) / 65535 # (1, H, W)
 
         # --------------------------------------------------------
         # Transforms

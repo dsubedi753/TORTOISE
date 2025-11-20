@@ -21,7 +21,6 @@ SEGMENTATION_FOLDER  = os.path.join(DATA_FOLDER, "segmentations_masked")
 RGB_FOLDER           = os.path.join(DATA_FOLDER, "training_images_RGBs")
 
 root = Path(__file__).resolve().parents[2]   # project root
-config_file = root / "configs" / "config.yml"
 OUTPUT_DATASET = root / "data"   # data folder
 
 # Ensure output directory exists
