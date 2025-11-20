@@ -13,7 +13,7 @@ import shutil
 # User-configurable paths
 # ============================
 
-DATA_FOLDER = r"D:\Divas\Projects\MSCS\7643\Project\GeoCompassSegmentations"
+DATA_FOLDER = r"/home/user" # Replace this with wherever you have your data
 
 TRAINING_IMAGE_FOLDER = os.path.join(DATA_FOLDER, "training_images_masked")
 SEGMENTATION_FOLDER  = os.path.join(DATA_FOLDER, "segmentations_masked")
