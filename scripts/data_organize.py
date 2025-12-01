@@ -14,14 +14,17 @@ from pathlib import Path
 # User-configurable paths
 # ============================
 
-DATA_FOLDER = r"/home/user/GeoCompassSegmentations" # Replace this with wherever you have your data
 
-TRAINING_IMAGE_FOLDER = os.path.join(DATA_FOLDER, "training_images_masked")
-SEGMENTATION_FOLDER  = os.path.join(DATA_FOLDER, "segmentations_masked")
-RGB_FOLDER           = os.path.join(DATA_FOLDER, "training_images_RGBs")
+# Replace this with wherever you have your raw data
+root = Path(os.getenv("PROJECT_ROOT"))  
+DATA_FOLDER = root / "data" 
+RAW_DATA_FOLDER = DATA_FOLDER / "raw"
 
-root = Path(__file__).resolve().parents[2]   # project root
-OUTPUT_DATASET = root / "data"   # data folder
+TRAINING_IMAGE_FOLDER = RAW_DATA_FOLDER / "training_images_masked"
+SEGMENTATION_FOLDER  = RAW_DATA_FOLDER / "segmentations_masked"
+RGB_FOLDER           = RAW_DATA_FOLDER / "training_images_RGBs"
+
+OUTPUT_DATASET = root / "data" / "imageset"  # data folder
 
 # Ensure output directory exists
 os.makedirs(OUTPUT_DATASET, exist_ok=True)

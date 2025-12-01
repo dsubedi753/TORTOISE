@@ -1,4 +1,4 @@
 tiling:
   tile_size: 48
   stride: 24
-  validity_threshold: 0.9
+  validity_threshold: 0.5

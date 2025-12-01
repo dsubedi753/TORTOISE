@@ -210,9 +210,11 @@ __marimo__/
 
 
 ### Raw dataset
-raw/
-data/
+data/raw
+data/tiles*
+data/imageset
+
 
 
 ## Experimental Sciripts
-src/tortoise/__expr*
+src/tortoise/_exp*

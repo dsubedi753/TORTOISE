@@ -1,127 +1,79 @@
-# src/tortoise/dataset.py
-
-import os
-import csv
-from pathlib import Path
 import torch
 from torch.utils.data import Dataset
+from pathlib import Path
 import rasterio
-from rasterio.windows import Window
-import numpy as np
-
 
 class TileDataset(Dataset):
     """
-    Uses tile_index.csv to load tiles from ms.tif, rgb.png, and label.tif using rasterio.
-    RGB is always assumed to be PNG.
+    Loads tiles from: data/tiles/
+        tile_ms_XXX.tif      (13 bands)
+        tile_rgb_XXX.png     (3 band RGB)  -- optional usage
+        tile_label_XXX.tif   (mask)
+
+    No CSV is required.
     """
 
-    def __init__(
-        self,
-        dataset_root,
-        tile_index_csv,
-        load_ms=True,
-        load_rgb=False,
-        load_label=False,
-        transforms=None
-    ):
-        self.dataset_root = Path(dataset_root)
-        self.tile_index_csv = Path(tile_index_csv)
+    def __init__(self, root, use_rgb=False, transform=None, normalize_ms=False, normalizer =None):
+        self.root = Path(root)
+        self.use_rgb = use_rgb
+        self.transform = transform
+        self.normalizer = normalizer
+        self.normalize_ms = normalize_ms
 
-        self.load_ms = load_ms
-        self.load_rgb = load_rgb
-        self.load_label = load_label
-        self.transforms = transforms
+        # -------------------------------------------------
+        # Discover all tile IDs by scanning tile_ms_*.tif
+        # -------------------------------------------------
+        self.ms_paths = sorted(self.root.glob("tile_ms_*.tif"))
+        if len(self.ms_paths) == 0:
+            raise RuntimeError(f"No tile_ms_*.tif files found in {self.root}")
 
-        # ------------------------------------------------------------
-        # Load tile_index.csv into memory
-        # ------------------------------------------------------------
-        self.entries = []
-        with open(self.tile_index_csv, "r") as f:
-            reader = csv.DictReader(f)
-            for row in reader:
-                self.entries.append({
-                    "tile_id": int(row["tile_id"]),
-                    "image_id": row["image_id"],
-                    "h0": int(row["h0"]),
-                    "w0": int(row["w0"]),
-                    "tile_size": int(row["height"])
-                })
+        # Extract tile IDs like "000" from filenames
+        self.tile_ids = [p.stem.replace("tile_ms_", "") for p in self.ms_paths]
 
-        self.tile_size = self.entries[0]["tile_size"]
+        # Prebuild file paths for speed
+        self.rgb_paths   = {tid: self.root / f"tile_rgb_{tid}.png" for tid in self.tile_ids}
+        self.label_paths = {tid: self.root / f"tile_label_{tid}.tif" for tid in self.tile_ids}
 
-        # ------------------------------------------------------------
-        # Cache file paths per image_id
-        # ------------------------------------------------------------
-        self.ms_paths = {}
-        self.rgb_paths = {}
-        self.label_paths = {}
-
-        for entry in self.entries:
-            img = entry["image_id"]
-            folder = self.dataset_root / img
-
-            if img not in self.ms_paths:
-                self.ms_paths[img] = folder / "ms.tif"
-
-            if self.load_rgb and img not in self.rgb_paths:
-                self.rgb_paths[img] = folder / "rgb.png"
-
-            if self.load_label and img not in self.label_paths:
-                self.label_paths[img] = folder / "label.tif"
-
-
-    # ------------------------------------------------------------
-    # PyTorch Methods
-    # ------------------------------------------------------------
     def __len__(self):
-        return len(self.entries)
+        return len(self.tile_ids)
+
+    def _read_raster(self, path):
+        with rasterio.open(path) as src:
+            arr = src.read()        # (C, H, W)
+            return torch.from_numpy(arr).float()
+        
+    def _read_mask(self, path):
+        with rasterio.open(path) as src:
+            arr = src.dataset_mask()      # (H, W)
+            return torch.from_numpy(arr).float()
 
     def __getitem__(self, index):
-        entry = self.entries[index]
+        tid = self.tile_ids[index]
 
-        tile_id  = entry["tile_id"]
-        image_id = entry["image_id"]
-        h0       = entry["h0"]
-        w0       = entry["w0"]
-        tile_sz  = entry["tile_size"]
+        ms   = self._read_raster(self.root / f"tile_ms_{tid}.tif").float()        # (13,H,W)
+        mask = self._read_mask(self.root / f"tile_ms_{tid}.tif").float()/255    # (1,H,W) or (H,W)
+        label = self._read_raster(self.root / f"tile_label_{tid}.tif").float()/65535    # (1,H,W) or (H,W)
+        
+        if self.normalize_ms:
+            ms = self.normalizer(ms)
+
+        # If use_rgb=True (optional)
+        rgb = None
+        if self.use_rgb:
+            rgb = self._read_raster(self.root / f"tile_rgb_{tid}.png")    # (3,H,W)
 
         sample = {
-            "tile_id": tile_id,
-            "image_id": image_id,
-            "coords": (h0, w0),
+            "tile_id": tid,
+            "ms": ms,
+            "label": label,
+            "mask": mask,
         }
 
-        window = Window(w0, h0, tile_sz, tile_sz)
+        if rgb is not None:
+            sample["rgb"] = rgb
 
-        # --------------------------------------------------------
-        # MS tile
-        # --------------------------------------------------------
-        if self.load_ms:
-            with rasterio.open(self.ms_paths[image_id]) as src:
-                ms_tile = src.read(window=window)  # (C, H, W)
-            sample["ms"] = torch.from_numpy(ms_tile).float()
-
-        # --------------------------------------------------------
-        # RGB tile (from PNG)
-        # --------------------------------------------------------
-        if self.load_rgb:
-            with rasterio.open(self.rgb_paths[image_id]) as src:
-                rgb = src.read(window=window) # (3, H, W)
-            sample["rgb"] = torch.from_numpy(rgb).float()
-
-        # --------------------------------------------------------
-        # Label tile
-        # --------------------------------------------------------
-        if self.load_label:
-            with rasterio.open(self.label_paths[image_id]) as src:
-                lab_tile = src.read(1, window=window)  # (H, W)
-            sample["label"] = torch.from_numpy(lab_tile).long().unsqueeze(0) / 65535 # (1, H, W)
-
-        # --------------------------------------------------------
-        # Transforms
-        # --------------------------------------------------------
-        if self.transforms is not None:
-            sample = self.transforms(sample)
+        # Optional transforms
+        if self.transform:
+            sample = self.transform(sample)
 
         return sample

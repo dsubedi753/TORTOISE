@@ -89,15 +89,15 @@ def load_config(path):
 # === Folder Scanning ========================================================
 # ============================================================================
 
-def find_image_folders(dataset_root):
+def find_image_folders(imageset_root):
     """
     Return sorted list of valid image ID folders (3-digit names).
     Example: "013", "014", ...
     """
     folders = []
-    for name in os.listdir(dataset_root):
+    for name in os.listdir(imageset_root):
         if re.fullmatch(r"\d{3}", name):
-            folder_path = os.path.join(dataset_root, name)
+            folder_path = os.path.join(imageset_root, name)
             if os.path.isdir(folder_path):
                 folders.append(name)
 
@@ -183,8 +183,10 @@ def tilify(dataset_root, tile_size, stride, threshold):
     tile_index_final = os.path.join(dataset_root, "tile_index.csv")
 
     global_tile_id = 0
+    
+    imageset_root = dataset_root / "imageset"
 
-    folders = find_image_folders(dataset_root)
+    folders = find_image_folders(imageset_root)
     print(f"Found {len(folders)} image folders.")
 
     with open(tile_index_tmp, "w", newline="") as csvfile:
@@ -193,7 +195,7 @@ def tilify(dataset_root, tile_size, stride, threshold):
 
         # Process each image
         for image_id in folders:
-            folder = os.path.join(dataset_root, image_id)
+            folder = os.path.join(imageset_root, image_id)
             ms_path = os.path.join(folder, "ms.tif")
 
             print(f"\nProcessing image {image_id} ...")
@@ -274,8 +276,9 @@ def run_tilify(config_file, dataset_folder):
     threshold = cfg["tiling"].get("validity_threshold", 1.0)
 
     dataset_root = Path(dataset_folder).resolve()
-    if not dataset_root.exists():
-        raise FileNotFoundError(f"Dataset folder does not exist: {dataset_root}")
+    imageset_root = dataset_root / "imageset"
+    if not imageset_root.exists():
+        raise FileNotFoundError(f"Imageset folder does not exist: {imageset_root}")
 
     # Validate parameters
     assert_params(tile_size, stride)
@@ -289,8 +292,9 @@ def run_tilify(config_file, dataset_folder):
 # ============================================================================
     
 
-if __name__ == "__main__":
-    root = Path(__file__).resolve().parents[2]   # project root
+if __name__ == "__main__":   
+    root = Path(os.getenv("PROJECT_ROOT"))   # project root
     config_file = root / "configs" / "config.yml"
-    dataset_folder = root / "data"   # data folder
+    dataset_folder = root / "data"  # data folder
+     
     run_tilify(config_file, dataset_folder)
