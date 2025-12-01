@@ -116,7 +116,7 @@ def build_dataloaders(
     
     # Computer Normalization Stats if not precomputed
     if not normalizer.preloaded:
-        normalizer.compute_stats(train_ids)
+        normalizer.compute_stats(train_ids, tiles_dir)
         normalizer.load_stats()
     
     def expand_samples(ids, versions=("orig","aug1","aug2")):
