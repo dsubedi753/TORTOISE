@@ -44,9 +44,9 @@ def split_tile_ids(
 # -------------------------------------------------------------------
 
 
-def list_tile_ids(tiles_root):
+def list_tile_ids(tiles_dir):
     ids = []
-    for f in Path(tiles_root).glob("tile_ms_*.tif"):
+    for f in Path(tiles_dir).glob("tile_ms_*.tif"):
         m = re.match(r"tile_ms_(.+)\.tif", f.name)
         if m:
             ids.append(m.group(1)) 
@@ -116,7 +116,7 @@ def build_dataloaders(
     
     # Computer Normalization Stats if not precomputed
     if not normalizer.preloaded:
-        normalizer.compute_stats(train_ids)
+        normalizer.compute_stats(tile_ids=train_ids, tiles_dir=tiles_dir)
         normalizer.load_stats()
     
     def expand_samples(ids, versions=("orig","aug1","aug2")):

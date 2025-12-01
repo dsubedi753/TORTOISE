@@ -65,20 +65,20 @@ class DataNormalizer:
         self.max_vals = torch.tensor(stats['maxs'], dtype=torch.float32)
         self.range = self.max_vals - self.min_vals
     
-    def compute_stats(self, tile_ids, tiles_root:Path):
+    def compute_stats(self, tile_ids, tiles_dir:Path):
         """
         Compute min-max stats over given tile IDs and save to JSON.
         
         Args:
             tile_ids: List of tile IDs to compute stats on
-            tiles_root: Path to directory containing tile_ms_*.tif files
+            tiles_dir: Path to directory containing tile_ms_*.tif files
 
 
         Returns:
             dict containing per-channel means and count of valid pixels
         """
 
-        ms_files = [tiles_root / f"tile_ms_{tid}.tif" for tid in tile_ids]
+        ms_files = [tiles_dir / f"tile_ms_{tid}.tif" for tid in tile_ids]
         # Check all exist
         missing = [p for p in ms_files if not p.exists()]
         if missing:
