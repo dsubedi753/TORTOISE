@@ -9,6 +9,8 @@ import rasterio
 from rasterio.windows import Window
 import numpy as np
 
+from tortoise import normalizer
+
 
 class TileDataset(Dataset):
     """
@@ -23,7 +25,9 @@ class TileDataset(Dataset):
         load_ms=True,
         load_rgb=False,
         load_label=False,
-        transforms=None
+        transforms=None,
+        normalize_ms=False,
+        normalizer=None        
     ):
         self.dataset_root = Path(dataset_root)
         self.tile_index_csv = Path(tile_index_csv)
@@ -32,6 +36,8 @@ class TileDataset(Dataset):
         self.load_rgb = load_rgb
         self.load_label = load_label
         self.transforms = transforms
+        self.normalizer = normalizer
+        self.normalize_ms = normalize_ms
 
         # ------------------------------------------------------------
         # Load tile_index.csv into memory
@@ -97,10 +103,13 @@ class TileDataset(Dataset):
         # --------------------------------------------------------
         # MS tile
         # --------------------------------------------------------
-        if self.load_ms:
-            with rasterio.open(self.ms_paths[image_id]) as src:
-                ms_tile = src.read(window=window)  # (C, H, W)
-            sample["ms"] = torch.from_numpy(ms_tile).float()
+        with rasterio.open(self.ms_paths[image_id]) as src:
+            ms_tile = src.read(window=window).astype("float32")  # (C, H, W)
+            
+        if self.normalize_ms:   
+            ms_tile = self.normalizer(ms_tile)
+            
+        sample["ms"] = torch.from_numpy(ms_tile)
 
         # --------------------------------------------------------
         # RGB tile (from PNG)
@@ -113,10 +122,16 @@ class TileDataset(Dataset):
         # --------------------------------------------------------
         # Label tile
         # --------------------------------------------------------
-        if self.load_label:
-            with rasterio.open(self.label_paths[image_id]) as src:
-                lab_tile = src.read(1, window=window)  # (H, W)
-            sample["label"] = torch.from_numpy(lab_tile).long().unsqueeze(0) / 65535 # (1, H, W)
+        with rasterio.open(self.label_paths[image_id]) as src:
+            lab_tile = src.read(1, window=window)  # (H, W)
+        sample["label"] = torch.from_numpy(lab_tile).long().unsqueeze(0) / 65535 # (1, H, W)
+            
+        # --------------------------------------------------------
+        # Mask tile
+        # --------------------------------------------------------
+        with rasterio.open(self.label_paths[image_id]) as src:
+            lab_tile = src.dataset_mask(window=window)  # (H, W)
+        sample["mask"] = torch.from_numpy(lab_tile).long().unsqueeze(0) / 255 # (1, H, W)
 
         # --------------------------------------------------------
         # Transforms
