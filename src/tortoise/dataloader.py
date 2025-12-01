@@ -1,19 +1,15 @@
-from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 from nbformat import versions
 import torch
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import DataLoader
 from tortoise.dataset import TileDataset
-from tortoise.augmentations import apply_augmentation, sample_aug_map, save_aug_map, AugMap  # new
+from tortoise.augmentations import AUG_KEYS
 from pathlib import Path
 import re
 import numpy as np
 
-# -------------------------------------------------------------------
 # Split helpers
-# -------------------------------------------------------------------
-
 def split_tile_ids(
-    tile_ids: Sequence[str],
+    tile_ids: list[str],
     seed: int = 42,
     train_ratio: float = 0.8,
     val_ratio: float = 0.1,
@@ -39,11 +35,7 @@ def split_tile_ids(
     return train_ids, val_ids, test_ids
 
 
-# -------------------------------------------------------------------
 # Tile ID
-# -------------------------------------------------------------------
-
-
 def list_tile_ids(tiles_dir):
     ids = []
     for f in Path(tiles_dir).glob("tile_ms_*.tif"):
@@ -54,23 +46,17 @@ def list_tile_ids(tiles_dir):
 
 
 
-
-# -------------------------------------------------------------------
 # Dataloader builder
-# -------------------------------------------------------------------
-
-
 def build_dataloaders(
     tiles_dir,
     batch_size: int,
-    normalizer,
     seed: int = 42,
     train_ratio: float = 0.8,
     val_ratio: float = 0.1,
     test_ratio: float | None = None,
     use_rgb: bool = False,
+    use_ms: bool = True,
     num_workers: int = 0,
-    save_aug_map_path: str | Path | None = None,
 ):
     """
     High-level helper to build train/val/test dataloaders with pre-sampled
@@ -88,68 +74,60 @@ def build_dataloaders(
         - Each (tile_id, version) is split independently; a given tile_id may
           have 0, 1, 2, or 3 versions in any particular split.
     """
+    
+    if use_rgb == use_ms:
+        raise ValueError("One and only one of use_rgb or use_ms may be True.")
+
     tiles_dir = Path(tiles_dir)
 
     # 1. discover tile_ids
     tile_ids = list_tile_ids(tiles_dir)
-
-    # 2. pre-sample augmentations for aug1/aug2
-    aug_map: AugMap = sample_aug_map(
-        tile_ids=tile_ids,
-        versions=("aug1", "aug2"),
-        seed=seed,
-    )
-
-    # optionally save aug_map for later inspection / reproducibility
-    if save_aug_map_path is not None:
-        save_aug_map(aug_map, save_aug_map_path)
-        
-
-    # 4. split ids into train/val/test
-    train_ids, val_ids, test_ids = split_tile_ids(
-    tile_ids,
-    seed=seed,
-    train_ratio=train_ratio,
-    val_ratio=val_ratio,
-    test_ratio=test_ratio,
-    )
     
-    # Computer Normalization Stats if not precomputed
-    if not normalizer.preloaded:
-        normalizer.compute_stats(tile_ids=train_ids, tiles_dir=tiles_dir)
-        normalizer.load_stats()
+
+    # 2. split ids into train/val/test
+    train_ids, val_ids, test_ids = split_tile_ids(tile_ids,
+                                                    seed=seed,
+                                                    train_ratio=train_ratio,
+                                                    val_ratio=val_ratio,
+                                                    test_ratio=test_ratio,
+                                                )
     
-    def expand_samples(ids, versions=("orig","aug1","aug2")):
-        return [(tid, ver) for tid in ids for ver in versions]
     
-    # 5. Expand ids to samples with all versions
-    train_samples = expand_samples(train_ids)
-    val_samples   = expand_samples(val_ids)
-    test_samples  = expand_samples(test_ids)
+    def sample_augmentations(ids, aug_keys, seed: int = 42):
+        rng = np.random.RandomState(seed)
+        out = []
+        for tid in ids:
+            augs = rng.choice(aug_keys, size=2, replace=True)
+            for aug in [None] + list(augs):
+                out.append((tid, aug))
+        return out
+    
+    # 3. Expand ids to samples with all versions
+    train_samples = sample_augmentations(train_ids, AUG_KEYS, seed=seed)
+    val_samples   = sample_augmentations(val_ids, AUG_KEYS, seed=seed)
+    test_samples  = sample_augmentations(test_ids, AUG_KEYS, seed=seed)
 
     # 5. build datasets
     train_ds = TileDataset(
-        root=tiles_dir,
-        samples=train_samples,
+        tiles_dir=tiles_dir,
+        tile_ids=train_samples,
+        use_ms=use_ms,
         use_rgb=use_rgb,
-        normalizer=normalizer,
-        aug_map=aug_map,
+
     )
 
     val_ds = TileDataset(
-        root=tiles_dir,
-        samples=val_samples,
+        tiles_dir=tiles_dir,
+        tile_ids=val_samples,
+        use_ms=use_ms,
         use_rgb=use_rgb,
-        normalizer=normalizer,
-        aug_map=aug_map,
     )
 
     test_ds = TileDataset(
-        root=tiles_dir,
-        samples=test_samples,
+        tiles_dir=tiles_dir,
+        tile_ids=test_samples,
+        use_ms=use_ms,
         use_rgb=use_rgb,
-        normalizer=normalizer,
-        aug_map=aug_map,
     )
 
     # 6. build dataloaders

@@ -12,11 +12,8 @@ Augmentation keys:
 """
 
 from __future__ import annotations
-
-from pathlib import Path
-import json
 import random
-from typing import Dict, Iterable, List, Mapping, MutableMapping, Sequence, Tuple
+from typing import List
 
 import albumentations as A
 import numpy as np
@@ -79,105 +76,39 @@ def _transform_for_name(name: str) -> A.BasicTransform:
 
 
 def apply_augmentation(
-    ms_hwc: np.ndarray,
+    image_hwc: np.ndarray,
     label_hw: np.ndarray | None,
     mask_hw: np.ndarray | None,
     aug_name: str,
-) -> Tuple[np.ndarray, np.ndarray | None, np.ndarray | None]:
-    """
-    Apply a given augmentation to ms (H,W,C) and optionally label/mask (H,W).
-
-    Geometric transforms:
-        - applied to ms, label, mask
-
-    Photometric transforms (noise/blur/iscale):
-        - applied to ms only (label/mask untouched)
-    """
+):
     core = _transform_for_name(aug_name)
 
+    
+    # GEOMETRIC (apply to all targets)
     if aug_name in GEOMETRIC_KEYS:
-        additional_targets: Dict[str, str] = {}
-        data: Dict[str, np.ndarray] = {"image": ms_hwc}
+        additional = {}
+        data = {"image": image_hwc}
 
         if label_hw is not None:
-            additional_targets["label"] = "mask"
             data["label"] = label_hw
-        if mask_hw is not None:
-            additional_targets["valid"] = "mask"
-            data["valid"] = mask_hw
+            additional["label"] = "mask"
 
-        aug = A.Compose([core], additional_targets=additional_targets)
+        if mask_hw is not None:
+            data["mask"] = mask_hw
+            additional["mask"] = "mask"
+
+        aug = A.Compose([core], additional_targets=additional)
         out = aug(**data)
 
-        ms_out = out["image"]
-        label_out = out.get("label", label_hw)
-        mask_out = out.get("valid", mask_hw)
-        return ms_out, label_out, mask_out
+        return (
+            out["image"],
+            out.get("label", label_hw),
+            out.get("mask", mask_hw),
+        )
 
-    # Photometric: image only
+    
+    # PHOTOMETRIC (image only)
     aug = A.Compose([core])
-    out_img = aug(image=ms_hwc)["image"]
+    out_img = aug(image=image_hwc)["image"]
+
     return out_img, label_hw, mask_hw
-
-
-# -------------------------------------------------------------------
-# AUG_MAP utilities
-# -------------------------------------------------------------------
-
-AugMap = Dict[Tuple[str, str], str]
-
-
-def sample_aug_map(
-    tile_ids: Sequence[str],
-    versions: Sequence[str] = ("aug1", "aug2"),
-    aug_keys: Sequence[str] = AUG_KEYS,
-    seed: int = 42,
-) -> AugMap:
-    """
-    Pre-sample ONE augmentation for each (tile_id, version) pair in versions,
-    using a fixed RNG seed for reproducibility.
-    """
-    rng = random.Random(seed)
-    aug_map: AugMap = {}
-
-    for tid in tile_ids:
-        for ver in versions:
-            key = (tid, ver)
-            aug_name = rng.choice(list(aug_keys))
-            aug_map[key] = aug_name
-
-    return aug_map
-
-
-def _encode_key(tid: str, version: str) -> str:
-    return f"{tid}::{version}"
-
-
-def _decode_key(key: str) -> Tuple[str, str]:
-    tid, version = key.split("::", 1)
-    return tid, version
-
-
-def save_aug_map(aug_map: Mapping[Tuple[str, str], str], path: str | Path) -> None:
-    """
-    Save AUG_MAP as JSON. Keys are serialized as "tile_id::version".
-    """
-    path = Path(path)
-    serializable = {_encode_key(tid, ver): name for (tid, ver), name in aug_map.items()}
-    with path.open("w", encoding="utf-8") as f:
-        json.dump(serializable, f, indent=2)
-
-
-def load_aug_map(path: str | Path) -> AugMap:
-    """
-    Load AUG_MAP from JSON saved via save_aug_map.
-    """
-    path = Path(path)
-    with path.open("r", encoding="utf-8") as f:
-        raw = json.load(f)
-
-    aug_map: AugMap = {}
-    for key, name in raw.items():
-        tid, ver = _decode_key(key)
-        aug_map[(tid, ver)] = name
-    return aug_map

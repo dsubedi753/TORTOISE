@@ -3,8 +3,8 @@ import torch
 from torch.utils.data import Dataset
 from pathlib import Path
 import rasterio
-from typing import Dict, Iterable, List, Optional, Sequence, Tuple
-from tortoise.augmentations import apply_augmentation, sample_aug_map, save_aug_map, AugMap  # new
+from typing import Dict, Iterable, List, Optional, Sequence, Tuple, Union
+from tortoise.augmentations import apply_augmentation # new
 
 
 
@@ -22,43 +22,49 @@ class TileDataset(Dataset):
 
     def __init__(
         self,
-        root,
-        tile_ids: Optional[Sequence[str]] = None,
-        samples: Optional[Sequence[Tuple[str, str]]] = None,
-        use_rgb: bool = False,
-        transform=None,
-        normalizer=None,
-        aug_map: Optional[AugMap] = None,
+        tiles_dir,
+        tile_ids: Sequence[Union[str, Tuple[str, str]]],
+        use_ms: bool = True,
+        use_rgb: bool = False,    
     ):
-        self.root = Path(root)
+        self.tiles_dir = Path(tiles_dir)
+        self.use_ms = use_ms
         self.use_rgb = use_rgb
-        self.transform = transform
-        self.normalizer = normalizer
-        self.aug_map: Optional[AugMap] = aug_map
 
-        # -------------------------------------------------
-        # Discover all tile IDs by scanning tile_ms_*.tif
-        # -------------------------------------------------
-        self.ms_paths = sorted(self.root.glob("tile_ms_*.tif"))
-        if len(self.ms_paths) == 0:
-            raise RuntimeError(f"No tile_ms_*.tif files found in {self.root}")
 
-        # Extract tile IDs like "00000" from filenames
-        if tile_ids is not None:
-            self.tile_ids = list(tile_ids)
-        else:
-            self.tile_ids = [p.stem.replace("tile_ms_", "") for p in self.ms_paths]
+        
+        # Normalize tile_ids → List[(tid, version)]
+        samples: List[Tuple[str, Optional[str]]] = []
+        for item in tile_ids:
+            if isinstance(item, tuple):
+                tid, version = item
+            else:
+                tid, version = item, None
+            samples.append((tid, version))
+        self.samples = samples
+        
+        
+        # Unique tile IDs
+        self.unique_ids = sorted({tid for (tid, _) in self.samples})
 
-        # Build sample list: (tile_id, version)
-        # If samples given, use them; otherwise default to (tid, "orig") only.
-        if samples is not None:
-            self.samples: List[Tuple[str, str]] = list(samples)
-        else:
-            self.samples = [(tid, "orig") for tid in self.tile_ids]
-
-        # Prebuild file paths for speed
-        self.rgb_paths = {tid: self.root / f"tile_rgb_{tid}.png" for tid in self.tile_ids}
-        self.label_paths = {tid: self.root / f"tile_label_{tid}.tif" for tid in self.tile_ids}
+        
+        # Build paths
+        if use_ms: self.ms_paths    = {tid: self.tiles_dir / f"tile_ms_{tid}.tif"    for tid in self.unique_ids}
+        self.label_paths = {tid: self.tiles_dir / f"tile_label_{tid}.tif" for tid in self.unique_ids}
+        if use_rgb: self.rgb_paths   = {tid: self.tiles_dir / f"tile_rgb_{tid}.png"   for tid in self.unique_ids}
+        
+        
+        
+        # Validate
+        for tid in self.unique_ids:
+            if self.use_ms:
+                if not self.ms_paths[tid].exists():
+                    raise FileNotFoundError(f"Missing MS tile: {self.ms_paths[tid]}")
+            if not self.label_paths[tid].exists():
+                raise FileNotFoundError(f"Missing label tile: {self.label_paths[tid]}")
+            if self.use_rgb:
+                if not self.rgb_paths[tid].exists():
+                    raise FileNotFoundError(f"Missing RGB tile: {self.rgb_paths[tid]}")
 
     def __len__(self):
         return len(self.samples)
@@ -73,71 +79,65 @@ class TileDataset(Dataset):
             arr = src.dataset_mask()      # (H, W)
             return torch.from_numpy(arr).float()
 
+     
+    # Main getitem
     def __getitem__(self, index):
         tid, version = self.samples[index]
 
-        # Read multispectral tile
-        ms = self._read_raster(self.root / f"tile_ms_{tid}.tif").float()      # (13, H, W)
 
-        # dataset_mask (valid pixels)
-        mask = self._read_mask(self.root / f"tile_ms_{tid}.tif").float() / 255.0  # (H, W)
+        if self.use_ms:                                                     # Load MS if requested
+            image = self._read_raster(self.ms_paths[tid]).float()/10000.0   # (13,H,W)
+        elif self.use_rgb:                                                  # Load RGB if requested
+            image = self._read_raster(self.rgb_paths[tid]).float()          # (3,H,W)
+        else:
+            raise RuntimeError("Neither MS nor RGB is enabled in dataset.")
+        
+        # --- valid mask
+        mask = self._read_mask(self.label_paths[tid]).float() / 255.0   # (H,W)
 
-        # Label tile
-        label = self._read_raster(self.root / f"tile_label_{tid}.tif").float() / 65535.0  # (1, H, W) or (C,H,W)
+        # --- label
+        label = self._read_raster(self.label_paths[tid]).float() / 65535.0  # (H,W)
+        if label.ndim == 2:
+            label = label.unsqueeze(0)  # (1,H,W)
 
-        # Normalize MS if requested (before augmentation)
-        if self.normalizer is not None:
-            ms = self.normalizer(ms)
+        
+        if version is not None:
+            # Prepare numpy versions (convert CHW → HWC)
+            image_np = image.permute(1, 2, 0).cpu().numpy()   # (H,W,C)
+            label_np = label[0].cpu().numpy() if label is not None else None
+            mask_np  = mask.cpu().numpy() if mask is not None else None
 
-        # Optional RGB
-        rgb = None
-        if self.use_rgb:
-            rgb = self._read_raster(self.root / f"tile_rgb_{tid}.png")    # (3, H, W)
+            
+            # Apply augmentation
+            image_np_aug, label_np_aug, mask_np_aug = apply_augmentation(
+                image_hwc=image_np,
+                label_hw=label_np,
+                mask_hw=mask_np,
+                aug_name=version,
+            )
 
-        # -------------------------------------------------
-        # Apply augmentation if version != "orig" and aug_map is provided
-        # -------------------------------------------------
-        if self.aug_map is not None and version != "orig":
-            aug_name = self.aug_map.get((tid, version), None)
-            if aug_name is not None:
-                # Convert to numpy (H, W, C) and (H, W)
-                # ms: (C,H,W) -> (H,W,C)
-                ms_np = ms.permute(1, 2, 0).cpu().numpy()
+            
+            # Convert back to PyTorch tensors
+            image = torch.from_numpy(image_np_aug).permute(2, 0, 1).float()
 
-                # label: (C,H,W) or (H,W) -> (H,W)
-                if label.ndim == 3:
-                    label_np = label[0].cpu().numpy()
-                else:
-                    label_np = label.cpu().numpy()
-
-                mask_np = mask.cpu().numpy()
-
-                ms_np_aug, label_np_aug, mask_np_aug = apply_augmentation(
-                    ms_hwc=ms_np,
-                    label_hw=label_np,
-                    mask_hw=mask_np,
-                    aug_name=aug_name,
-                )
-
-                # Convert back to torch
-                ms = torch.from_numpy(ms_np_aug).permute(2, 0, 1).float()
+            if label_np_aug is not None:
                 label = torch.from_numpy(label_np_aug).unsqueeze(0).float()
-                mask = torch.from_numpy(mask_np_aug).float()
 
+            if mask_np_aug is not None:
+                mask  = torch.from_numpy(mask_np_aug).float()
+
+        
+        # Store back into sample (MS or RGB)
         sample = {
             "tile_id": tid,
             "version": version,
-            "ms": ms,
             "label": label,
             "mask": mask,
         }
 
-        if rgb is not None:
-            sample["rgb"] = rgb
+        # Assign to appropriate key
+        if self.use_ms:
+            sample["ms"] = image
 
-        # Optional external transforms (e.g., tensor-level transforms)
-        if self.transform:
-            sample = self.transform(sample)
-
-        return sample
-
+        if self.use_rgb:
+            sample["rgb"] = image

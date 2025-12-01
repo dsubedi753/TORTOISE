@@ -13,7 +13,7 @@ class DataNormalizer:
         Initialize normalizer with min-max stats from JSON file.
         
         Args:
-            json_path: Path to JSON file containing 'min' and 'max' lists of size 13
+            json_path: Path to JSON file containing 'min' and 'max' lists of size C
         """
         
         self.json_path = json_path
@@ -26,17 +26,17 @@ class DataNormalizer:
     
     def __call__(self, tensor):
         """
-        Normalize tensor of shape (13, H, W) using min-max normalization.
+        Normalize tensor of shape (C, H, W) using min-max normalization.
         
         Args:
-            tensor: Tensor of shape (13, H, W)
+            tensor: Tensor of shape (C, H, W)
             
         Returns:
             Normalized tensor with values in [0, 1]
         """
-        # Reshape min/max to (13, 1, 1) for broadcasting
-        min_vals = self.min_vals.view(13, 1, 1)
-        range_vals = self.range.view(13, 1, 1)
+        # Reshape min/max to (C, 1, 1) for broadcasting
+        min_vals = self.min_vals.view(-1, 1, 1)
+        range_vals = self.range.view(-1, 1, 1)
         
         normalized = (tensor - min_vals) / range_vals
         return normalized
@@ -46,13 +46,13 @@ class DataNormalizer:
         Reverse min-max normalization.
         
         Args:
-            tensor: Normalized tensor of shape (13, H, W)
+            tensor: Normalized tensor of shape (C, H, W)
             
         Returns:
             Denormalized tensor
         """
-        min_vals = self.min_vals.view(13, 1, 1)
-        range_vals = self.range.view(13, 1, 1)
+        min_vals = self.min_vals.view(-1, 1, 1)
+        range_vals = self.range.view(-1, 1, 1)
         
         return tensor * range_vals + min_vals
     
@@ -89,12 +89,12 @@ class DataNormalizer:
 
         for f in tqdm(ms_files, desc="Computing masked min/max"):
             with rasterio.open(f) as src:
-                ms = src.read().astype(np.float64)               # (13, H, W)
+                ms = src.read().astype(np.float64)               # (C, H, W)
                 mask = src.dataset_mask().astype(np.float64) / 255.0  # (H, W)
 
             C, H, W = ms.shape
 
-            # broadcast mask to (13, H, W)
+            # broadcast mask to (C, H, W)
             mask_3d = mask.reshape(1, H, W)
 
             # apply mask
