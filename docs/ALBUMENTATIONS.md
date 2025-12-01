@@ -26,7 +26,7 @@ If you use certain Albumentations transforms that require OpenCV or scikit-image
 
 - Source: `src/tortoise/augmentations.py` (core utilities)
 - Dataset integration: `src/tortoise/dataset.py` (applies augmentations to tile samples)
-- Dataloder helper: `src/tortoise/dataloader.py` (pre-sampling augmentations via AUG_MAP)
+ - Dataloader helper: `src/tortoise/dataloader.py` (pre-sampling augmentations via `sample_augmentations`)
 
 ---
 
@@ -63,10 +63,10 @@ It multiplies all pixel values by alpha in range [1-scale_limit, 1+scale_limit].
 
 Maps a name (like `hflip`, `noise`, or `iscale`) to a core Albumentations transform (e.g., `A.HorizontalFlip(p=1.0)`). Geometric transforms use `A.Compose` with `Transpose`+`Flip` where needed.
 
-### apply_augmentation(ms_hwc, label_hw, mask_hw, aug_name)
+### apply_augmentation(image_hwc, label_hw, mask_hw, aug_name)
 
-- Inputs:
-  - `ms_hwc`: multispectral tile (H, W, C) as numpy
+ - Inputs:
+   - `image_hwc`: multispectral or RGB tile (H, W, C) as numpy
   - `label_hw`: label mask (H, W) or None
   - `mask_hw`: valid pixel mask (H, W) or None
   - `aug_name`: augmentation name from `AUG_KEYS`
@@ -75,26 +75,24 @@ Maps a name (like `hflip`, `noise`, or `iscale`) to a core Albumentations transf
   - Geometric transforms (`hflip, vflip, dflip, rot90`) are applied to the image AND the label and mask by using `additional_targets` in `A.Compose`.
   - Photometric transforms (noise, blur, iscale) are applied to the image only; label and mask pass through unchanged.
 
-- Returns a tuple with transformed `ms` (H, W, C), `label` (H, W) or None, and `mask` (H, W) or None.
+ - Returns a tuple with transformed `image_hwc` (H, W, C), `label` (H, W) or None, and `mask` (H, W) or None.
 
-### sample_aug_map(tile_ids, versions=("aug1","aug2"), aug_keys=AUG_KEYS, seed=42)
+### sample_augmentations and `build_dataloaders`
 
-Pre-samples a single augmentation for every `(tile_id, version)` pair using the provided RNG seed. This produces an `AugMap` (dictionary mapping `(tid, version)` -> `aug_name`), which enables deterministic augmentation assignments across runs if you use the same seed.
+The dataloader's `build_dataloaders` function contains a helper `sample_augmentations(ids, aug_keys, seed=42)` that expands a list of tile ids into a list of tuples intended for the dataset's `samples` list. For each tile, two augmentations are sampled and the helper yields `(tid, None)`, `(tid, aug1)`, `(tid, aug2)`.
 
-- `save_aug_map(path)` & `load_aug_map(path)` save and load sampled `AugMap` as a JSON with keys serialized as `tile_id::version`.
+`build_dataloaders` uses deterministic RNG seeds by default (`seed` arg), so augmentation assignment is reproducible across runs if you fix the seed.
 
 ---
 
 ## 🧭 Data pipeline details (Important)
 
-- The dataset normalizes MS channels *before* augmentation (look at `dataset.py`): `self.normalizer` is applied prior to calling `apply_augmentation`.
-  - Implication: Photometric transforms (noise, blur, intensity scaling) operate on normalized values (for example, mean-std normalized numbers) rather than raw data. If you prefer to apply photometric transforms before normalization, you can alter the order in `dataset.py`.
+- The dataset currently scales multispectral values by dividing by 10000.0 before augmentation (see `TileDataset.__getitem__`). As a result photometric transforms operate on scaled pixel values rather than raw sensor readouts.
+  - If you prefer the photometric transforms to operate on raw values (e.g., for physically plausible noise models), perform augmentation prior to the division or apply a different normalizer.
 
-- Geometric transforms are applied to images, labels, and valid-mask (so pixel alignment is preserved).
+- Geometric transforms are applied to image, label, and mask so alignment is preserved.
 
-- For reproducibility:
-  - `build_dataloaders(..., seed=42)` calls `sample_aug_map` with the same seed, making augmentation deterministic across runs if you keep the seed and `save_aug_map_path` consistent.
-  - You can `save_aug_map` to a JSON file and re-load it later.
+- Reproducibility: `build_dataloaders(..., seed=42)` uses a deterministic RNG seed for sampling augmentations, so the set of `(tid, aug)` tuples produced by `sample_augmentations` is reproducible across runs when `seed` is fixed.
 
 ---
 
@@ -144,22 +142,22 @@ Pre-sampled augmentations and dataloaders:
 from tortoise.dataloader import build_dataloaders
 
 train_loader, val_loader, test_loader = build_dataloaders(
-    data_root=DATA_FOLDER / "tiles",
-    batch_size=16,
-    normalizer=dn,
-    use_rgb=False,
-    seed=42,
-    num_workers=0,
-    save_aug_map_path=PROJECT_FOLDER / "aug_map.json",
+  tiles_dir= DATA_FOLDER / "tiles",
+  batch_size=16,
+  seed=42,
+  use_rgb=False,
+  use_ms=True,
+  num_workers=0,
 )
+print(train_loader.dataset.samples[:6])  # tuples: (tile_id, None | aug_name)
 ```
 
-Inspecting or re-using saved `aug_map`:
+Inspecting dataset samples (the augmentation applied per sample):
 
 ```python
-from tortoise.augmentations import load_aug_map
-aug_map = load_aug_map(PROJECT_FOLDER / "aug_map.json")
-# Pass aug_map into a TileDataset
+# The `samples` attribute lists tuples: (tile_id, None | 'augmentation_name')
+samples = train_loader.dataset.samples
+print(samples[:8])
 ```
 
 ---
@@ -170,9 +168,3 @@ aug_map = load_aug_map(PROJECT_FOLDER / "aug_map.json")
 - Albumentations GitHub: https://github.com/albumentations-team/albumentations
 
 ---
-
-If you'd like, I can also:
-- Add a short notebook cell to `notebooks/Training.ipynb` that explains augmentation usage and shows the saved `aug_map` structure, or
-- Add unit tests that exercise `apply_augmentation` and `sample_aug_map` for full coverage.
-
-Let me know which additions you'd prefer! 💡
