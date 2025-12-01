@@ -115,10 +115,6 @@ class DataNormalizer:
                 global_mins = np.minimum(global_mins, tile_mins)
                 global_maxs = np.maximum(global_maxs, tile_maxs)
 
-        # Replace inf (if channel had no valid pixels)
-        global_mins = np.where(np.isinf(global_mins), 0.0, global_mins)
-        global_maxs = np.where(np.isinf(global_maxs), 0.0, global_maxs)
-
         stats = {
             "mins": global_mins.tolist(),
             "maxs": global_maxs.tolist(),
