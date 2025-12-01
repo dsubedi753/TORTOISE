@@ -30,12 +30,8 @@ import os
 import re
 
 
-# ============================================================================
-# === Allowed parameter sets ================================================
-# ============================================================================
 
-ALLOWED_TILE_SIZES = {16, 24, 32, 36, 48}
-ALLOWED_STRIDES    = {8, 12, 16, 18, 24, 48}
+
 
 
 # ============================================================================
@@ -43,6 +39,10 @@ ALLOWED_STRIDES    = {8, 12, 16, 18, 24, 48}
 # ============================================================================
 
 def assert_params(tile_size, stride):
+    #Allowed parameter sets
+
+    ALLOWED_TILE_SIZES = {16, 24, 32, 36, 48}
+    ALLOWED_STRIDES    = {8, 12, 16, 18, 24, 48}
     """Validate tile_size and stride with auto-derived compatibility rules."""
 
     # 1. tile_size allowed
