@@ -27,3 +27,7 @@ Once preprocessing is complete, you can load the dataset:
 ```python
 from tortoise.dataset import TileDataset
 ```# TORTOISE
+
+## Augmentations
+
+The project uses Albumentations for image augmentations (geometric and photometric transforms). See the `docs/ALBUMENTATIONS.md` file for details about supported transforms, how they are pre-sampled using AUG_MAP, how to reproduce augmentations, and how to add new transforms.
