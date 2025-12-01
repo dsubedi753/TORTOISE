@@ -45,7 +45,7 @@ def masked_bce_loss(logits, target, mask):
 # ---------------------------------------------------------
 # 2. One training epoch
 # ---------------------------------------------------------
-def train_one_epoch(model, loader, optimizer, device="cuda"):
+def train_one_epoch(model, loader, optimizer, device="cuda", scaler=None):
     """
     Train model for one epoch.
 
@@ -54,6 +54,7 @@ def train_one_epoch(model, loader, optimizer, device="cuda"):
         loader: training DataLoader
         optimizer: torch optimizer
         device: "cuda" or "cpu"
+        scaler: torch.cuda.amp.GradScaler (optional) for mixed precision
 
     Returns:
         Average loss over epoch.
@@ -67,11 +68,22 @@ def train_one_epoch(model, loader, optimizer, device="cuda"):
         mask  = batch["mask"].to(device)
 
         optimizer.zero_grad()
-        logits = model(ms)
 
-        loss = masked_bce_loss(logits, label, mask)
-        loss.backward()
-        optimizer.step()
+        # Mixed Precision Context
+        if scaler is not None:
+            with torch.cuda.amp.autocast(enabled=True):
+                logits = model(ms)
+                loss = masked_bce_loss(logits, label, mask)
+            
+            scaler.scale(loss).backward()
+            scaler.step(optimizer)
+            scaler.update()
+        else:
+            # Standard FP32
+            logits = model(ms)
+            loss = masked_bce_loss(logits, label, mask)
+            loss.backward()
+            optimizer.step()
 
         total_loss += loss.item()
 
@@ -82,7 +94,7 @@ def train_one_epoch(model, loader, optimizer, device="cuda"):
 # 3. Evaluation loop
 # ---------------------------------------------------------
 @torch.no_grad()
-def evaluate(model, loader, desc="Val", device="cuda"):
+def evaluate(model, loader, desc="Val", device="cuda", use_amp=False):
     """
     Evaluate model on validation or test set.
 
@@ -91,6 +103,7 @@ def evaluate(model, loader, desc="Val", device="cuda"):
         loader: DataLoader
         desc: tqdm label
         device: "cuda" or "cpu"
+        use_amp: bool
 
     Returns:
         Average loss over dataset.
@@ -103,8 +116,13 @@ def evaluate(model, loader, desc="Val", device="cuda"):
         label = batch["label"].to(device)
         mask  = batch["mask"].to(device)
 
-        logits = model(ms)
-        loss = masked_bce_loss(logits, label, mask)
+        if use_amp:
+            with torch.cuda.amp.autocast(enabled=True):
+                logits = model(ms)
+                loss = masked_bce_loss(logits, label, mask)
+        else:
+            logits = model(ms)
+            loss = masked_bce_loss(logits, label, mask)
 
         total_loss += loss.item()
 
