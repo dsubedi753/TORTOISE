@@ -13,10 +13,27 @@ import torch
 import torch.nn as nn
 from tqdm import tqdm
 
+# Device management utilities
+def get_device():
+    """Safely select GPU device if available, else CPU."""
+    if torch.cuda.is_available():
+        return torch.device("cuda")
+    else:
+        print("[WARN] CUDA not available; will use CPU. Training will be slow.")
+        return torch.device("cpu")
 
-# ---------------------------------------------------------
+
+def print_device_info():
+    """Print GPU info for debugging."""
+    if torch.cuda.is_available():
+        print(f"[INFO] CUDA available: {torch.cuda.get_device_name(0)}")
+        print(f"[INFO] GPU memory: {torch.cuda.get_device_properties(0).total_memory / 1e9:.2f} GB")
+    else:
+        print("[INFO] CUDA not available; using CPU")
+
+
+
 # 1. Loss (BCE with mask)
-# ---------------------------------------------------------
 _bce = nn.BCEWithLogitsLoss(reduction="none")
 
 
@@ -42,9 +59,7 @@ def masked_bce_loss(logits, target, mask):
     return (loss_map * mask).sum() / (mask.sum() + 1e-8)
 
 
-# ---------------------------------------------------------
 # 2. One training epoch
-# ---------------------------------------------------------
 def train_one_epoch(model, loader, optimizer, device="cuda", scaler=None):
     """
     Train model for one epoch.
@@ -91,8 +106,7 @@ def train_one_epoch(model, loader, optimizer, device="cuda", scaler=None):
 
 
 # ---------------------------------------------------------
-# 3. Evaluation loop
-# ---------------------------------------------------------
+# 3. Evaluation
 @torch.no_grad()
 def evaluate(model, loader, desc="Val", device="cuda", use_amp=False):
     """
