@@ -141,3 +141,5 @@ class TileDataset(Dataset):
 
         if self.use_rgb:
             sample["rgb"] = image
+        
+        return sample

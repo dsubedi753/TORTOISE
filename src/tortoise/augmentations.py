@@ -65,7 +65,7 @@ def _transform_for_name(name: str) -> A.BasicTransform:
         # Random 0/90/180/270 rotation
         return A.RandomRotate90(p=1.0)
     if name == "noise":
-        return A.GaussNoise(std_range = (0.02, 0.08), p=1.0)
+        return A.GaussNoise(std_range = (1e-9, 5e-7), p=1.0)
     if name == "blur":
         # light blur; tiles are only 48x48
         return A.GaussianBlur(blur_limit=(1, 3), p=1.0)
