@@ -219,3 +219,7 @@ data/tiles/
 src/tortoise/_exp*
 lukaune/
 data_trial/
+data/tiles.zip
+data/raw/
+data/imageset/
+data/tiles/
