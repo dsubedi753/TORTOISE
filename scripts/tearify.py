@@ -23,7 +23,7 @@ def extract_window(src_path: Path, window: Window, dst_path: Path):
     with rasterio.open(src_path) as src:
         # Read window as (bands, height, width)
         data = src.read(window=window)
-
+        mask = src.dataset_mask()[window.row_off:window.row_off+window.height, window.col_off: window.col_off+window.width]
         profile = src.profile.copy()
         profile.update(
             {
@@ -41,6 +41,7 @@ def extract_window(src_path: Path, window: Window, dst_path: Path):
 
         with rasterio.open(dst_path, "w", **profile) as dst:
             dst.write(data)
+            dst.write_mask(mask)
 
 
 def tearify(dataset_root: Path):
