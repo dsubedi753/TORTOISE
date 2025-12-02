@@ -88,7 +88,7 @@ class TileDataset(Dataset):
         if self.use_ms:                                                     # Load MS if requested
             image = self._read_raster(self.ms_paths[tid]).float()/10000.0   # (13,H,W)
         elif self.use_rgb:                                                  # Load RGB if requested
-            image = self._read_raster(self.rgb_paths[tid]).float()          # (3,H,W)
+            image = self._read_raster(self.rgb_paths[tid]).float()/255.0    # (3,H,W)
         else:
             raise RuntimeError("Neither MS nor RGB is enabled in dataset.")
         
@@ -140,6 +140,6 @@ class TileDataset(Dataset):
             sample["ms"] = image
 
         if self.use_rgb:
-            sample["rgb"] = image
+            sample["rgb"] = (image*255).int()
         
         return sample

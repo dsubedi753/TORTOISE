@@ -64,11 +64,9 @@ def _transform_for_name(name: str) -> A.BasicTransform:
     if name == "rot90":
         # Random 0/90/180/270 rotation
         return A.RandomRotate90(p=1.0)
-    if name == "noise":
-        return A.GaussNoise(std_range = (1e-9, 5e-7), p=1.0)
     if name == "blur":
         # light blur; tiles are only 48x48
-        return A.GaussianBlur(blur_limit=(1, 3), p=1.0)
+        return A.GaussianBlur(blur_limit=(1,3), p=1.0)
     if name == "iscale":
         return IntensityScale(scale_limit=0.1, p=1.0)
 
@@ -77,11 +75,18 @@ def _transform_for_name(name: str) -> A.BasicTransform:
 
 def apply_augmentation(
     image_hwc: np.ndarray,
-    label_hw: np.ndarray | None,
-    mask_hw: np.ndarray | None,
     aug_name: str,
+    label_hw: np.ndarray | None = None,
+    mask_hw: np.ndarray | None = None,
 ):
-    core = _transform_for_name(aug_name)
+    
+    if aug_name == "noise":
+        p10 = float(np.percentile(image_hwc, 10))
+        p90 = float(np.percentile(image_hwc, 90))
+        rng_range = max(p90 - p10, 1e-8)
+        core = A.GaussNoise(std_range=(0.02 * rng_range, 0.04 * rng_range),p=1.0)
+    else:
+        core = _transform_for_name(aug_name)
 
     
     # GEOMETRIC (apply to all targets)
