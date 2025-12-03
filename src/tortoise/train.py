@@ -1,143 +1,194 @@
-# train.py
-"""
-Utility training functions for Jupyter Notebook:
-    - masked_bce_loss
-    - train_one_epoch
-    - evaluate
-
-This file intentionally contains NO global training loop
-and performs NO work on import.
-"""
-
 import torch
 import torch.nn as nn
 from tqdm import tqdm
 
-# Device management utilities
-def get_device():
-    """Safely select GPU device if available, else CPU."""
-    if torch.cuda.is_available():
-        return torch.device("cuda")
-    else:
-        print("[WARN] CUDA not available; will use CPU. Training will be slow.")
-        return torch.device("cpu")
+
+#  Loss Components
+
+def dice_loss(logits, targets, mask, eps=1e-6):
+    probs = torch.sigmoid(logits)
+    probs = probs * mask
+    targets = targets * mask
+
+    p = probs.view(probs.size(0), -1)
+    t = targets.view(targets.size(0), -1)
+
+    inter = (p * t).sum(dim=1)
+    union = p.sum(dim=1) + t.sum(dim=1)
+
+    dice = (2 * inter + eps) / (union + eps)
+    return 1 - dice.mean()
 
 
-def print_device_info():
-    """Print GPU info for debugging."""
-    if torch.cuda.is_available():
-        print(f"[INFO] CUDA available: {torch.cuda.get_device_name(0)}")
-        print(f"[INFO] GPU memory: {torch.cuda.get_device_properties(0).total_memory / 1e9:.2f} GB")
-    else:
-        print("[INFO] CUDA not available; using CPU")
+def combined_loss(logits, targets, mask, bce_loss_fn):
+    # BCE (masked)
+    bce_raw = bce_loss_fn(logits, targets)             # shape: (B,1,H,W)
+    bce     = (bce_raw * mask).sum() / (mask.sum() + 1e-6)
+
+    # Dice
+    d_loss = dice_loss(logits, targets, mask)
+
+    return bce + 0.5 * d_loss
 
 
+def masked_iou(logits, targets, mask, eps=1e-6):
+    preds = (torch.sigmoid(logits) > 0.5).float()
 
-# 1. Loss (BCE with mask)
-_bce = nn.BCEWithLogitsLoss(reduction="none")
+    preds = preds * mask
+    targets = targets * mask
 
+    p = preds.view(preds.size(0), -1)
+    t = targets.view(targets.size(0), -1)
 
-def masked_bce_loss(logits, target, mask):
-    """
-    Compute BCE loss only over valid pixels.
+    inter = (p * t).sum(dim=1)
+    union = p.sum(dim=1) + t.sum(dim=1) - inter
 
-    Args:
-        logits: (B,1,H,W) raw model output
-        target: (B,1,H,W) ground truth mask (0..1)
-        mask:   (B,H,W)    valid mask (0/1)
-
-    Returns:
-        Scalar masked BCE loss.
-    """
-    # (B,1,H,W)
-    mask = mask.unsqueeze(1)
-
-    # (B,1,H,W)
-    loss_map = _bce(logits, target)
-
-    # average over valid pixels only
-    return (loss_map * mask).sum() / (mask.sum() + 1e-8)
+    return ((inter + eps) / (union + eps)).mean()
 
 
-# 2. One training epoch
-def train_one_epoch(model, loader, optimizer, device="cuda", scaler=None):
-    """
-    Train model for one epoch.
+#  Training Loop
 
-    Args:
-        model: U-Net instance
-        loader: training DataLoader
-        optimizer: torch optimizer
-        device: "cuda" or "cpu"
-        scaler: torch.cuda.amp.GradScaler (optional) for mixed precision
-
-    Returns:
-        Average loss over epoch.
-    """
+def train_one_epoch(model, loader, optimizer, device, pos_weight, use_amp=True, scaler=None):
     model.train()
     total_loss = 0.0
+    total_iou  = 0.0
+    count = 0
+
+    # BCEWithLogits with pos_weight for imbalance
+    bce_loss_fn = nn.BCEWithLogitsLoss(pos_weight=pos_weight, reduction="none")
 
     for batch in tqdm(loader, desc="Train", leave=False):
         ms    = batch["ms"].to(device)
         label = batch["label"].to(device)
-        mask  = batch["mask"].to(device)
+        mask  = batch["mask"].to(device).float()
 
         optimizer.zero_grad()
 
-        # Mixed Precision Context
-        if scaler is not None:
-            with torch.cuda.amp.autocast(enabled=True):
+        if use_amp:
+            with torch.cuda.amp.autocast():
                 logits = model(ms)
-                loss = masked_bce_loss(logits, label, mask)
-            
+                loss = combined_loss(logits, label, mask, bce_loss_fn)
             scaler.scale(loss).backward()
             scaler.step(optimizer)
             scaler.update()
         else:
-            # Standard FP32
             logits = model(ms)
-            loss = masked_bce_loss(logits, label, mask)
+            loss = combined_loss(logits, label, mask, bce_loss_fn)
             loss.backward()
             optimizer.step()
 
+        # compute IoU for progress monitoring
+        iou_val = masked_iou(logits, label, mask)
+
         total_loss += loss.item()
+        total_iou  += iou_val.item()
+        count += 1
 
-    return total_loss / len(loader)
+    return total_loss / count, total_iou / count
 
 
-# ---------------------------------------------------------
-# 3. Evaluation
+
+#  Evaluation Loop
+
 @torch.no_grad()
-def evaluate(model, loader, desc="Val", device="cuda", use_amp=False):
-    """
-    Evaluate model on validation or test set.
-
-    Args:
-        model: U-Net instance
-        loader: DataLoader
-        desc: tqdm label
-        device: "cuda" or "cpu"
-        use_amp: bool
-
-    Returns:
-        Average loss over dataset.
-    """
+def evaluate(model, loader, device, pos_weight, use_amp=True):
     model.eval()
     total_loss = 0.0
+    total_iou = 0.0
+    count = 0
 
-    for batch in tqdm(loader, desc=desc, leave=False):
+    bce_loss_fn = nn.BCEWithLogitsLoss(pos_weight=pos_weight, reduction="none")
+
+    for batch in tqdm(loader, desc="Eval", leave=False):
         ms    = batch["ms"].to(device)
         label = batch["label"].to(device)
-        mask  = batch["mask"].to(device)
+        mask  = batch["mask"].to(device).float()
 
         if use_amp:
-            with torch.cuda.amp.autocast(enabled=True):
+            with torch.cuda.amp.autocast():
                 logits = model(ms)
-                loss = masked_bce_loss(logits, label, mask)
+                loss = combined_loss(logits, label, mask, bce_loss_fn)
         else:
             logits = model(ms)
-            loss = masked_bce_loss(logits, label, mask)
+            loss = combined_loss(logits, label, mask, bce_loss_fn)
+
+        iou_val = masked_iou(logits, label, mask)
 
         total_loss += loss.item()
+        total_iou  += iou_val.item()
+        count += 1
 
-    return total_loss / len(loader)
+    return total_loss / count, total_iou / count
+
+
+
+def train_model(
+    model,
+    train_loader,
+    val_loader,
+    optimizer,
+    scheduler,
+    device,
+    pos_weight,
+    num_epochs,
+    checkpoint_path = None,
+    use_amp=True
+):
+    scaler = torch.amp.GradScaler() if use_amp else None
+
+    best_val_loss = float("inf")
+
+    train_losses = []
+    val_losses   = []
+    train_ious   = []
+    val_ious     = []
+
+    for epoch in range(1, num_epochs + 1):
+        print(f"\nEpoch {epoch}/{num_epochs}")
+
+        # ---- Train ----
+        train_loss, train_iou = train_one_epoch(
+            model=model,
+            loader=train_loader,
+            optimizer=optimizer,
+            device=device,
+            pos_weight=pos_weight,
+            use_amp=use_amp,
+            scaler=scaler,
+        )
+
+        # ---- Eval ----
+        val_loss, val_iou = evaluate(
+            model=model,
+            loader=val_loader,
+            device=device,
+            pos_weight=pos_weight,
+            use_amp=use_amp,
+        )
+
+        # scheduler
+        if scheduler is not None:
+            scheduler.step()
+
+        # record
+        train_losses.append(train_loss)
+        val_losses.append(val_loss)
+        train_ious.append(train_iou)
+        val_ious.append(val_iou)
+
+        print(f"  Train Loss: {train_loss:.6f} | IoU: {train_iou:.4f}")
+        print(f"  Val   Loss: {val_loss:.6f} | IoU: {val_iou:.4f}")
+
+        # ---- Checkpoint ----
+        if checkpoint_path is not None:
+            if val_loss < best_val_loss:
+                best_val_loss = val_loss
+                checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
+                torch.save(model.state_dict(), checkpoint_path)
+                print(f"Saved new best model to {checkpoint_path}")
+
+    print("\nTraining complete.")
+    print(f"Best Val Loss: {best_val_loss:.6f}")
+
+    return model, train_losses, val_losses, train_ious, val_ious
+

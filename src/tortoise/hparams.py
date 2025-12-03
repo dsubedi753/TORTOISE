@@ -61,7 +61,7 @@ def build_model(hparams):
 
     # Choose model
     if name == "U_Net":
-        model = U_Net(img_ch=ch_in, output_ch=ch_out)
+        model = U_Net(img_ch=ch_in, output_ch=ch_out, base=cfg.get("base_channels", 16), depth=cfg.get("depth", 4))
 
     elif name == "R2U_Net":
         model = R2U_Net(img_ch=ch_in, output_ch=ch_out)
