@@ -99,7 +99,7 @@ def build_dataloaders(
         out = []
         for tid in ids:
             augs = rng.choice(aug_keys, size=2, replace=True)
-            for aug in [None] + list(augs):
+            for aug in ["orig"] + list(augs):
                 out.append((tid, aug))
         return out
     

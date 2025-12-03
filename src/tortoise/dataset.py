@@ -39,7 +39,7 @@ class TileDataset(Dataset):
             if isinstance(item, tuple):
                 tid, version = item
             else:
-                tid, version = item, None
+                tid, version = item, "orig"
             samples.append((tid, version))
         self.samples = samples
         
@@ -100,8 +100,7 @@ class TileDataset(Dataset):
         if label.ndim == 2:
             label = label.unsqueeze(0)  # (1,H,W)
 
-        
-        if version is not None:
+        if version != "orig":
             # Prepare numpy versions (convert CHW → HWC)
             image_np = image.permute(1, 2, 0).cpu().numpy()   # (H,W,C)
             label_np = label[0].cpu().numpy() if label is not None else None
@@ -142,4 +141,5 @@ class TileDataset(Dataset):
         if self.use_rgb:
             sample["rgb"] = (image*255).int()
         
+            
         return sample
