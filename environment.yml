@@ -15,8 +15,7 @@ dependencies:
   - pandas
 
   # Geospatial / image IO
-  - rasterio           # important: installs GDAL correctly
-  - tifffile
+  - rasterio           # GeoTIFF reading/writing with proper GDAL integration
   - scikit-image
 
   # Machine Learning (CPU PyTorch)
@@ -30,3 +29,10 @@ dependencies:
   - tqdm
   - ipykernel
   - jupyterlab
+
+  # Pip dependencies (albumentations not in conda-forge)
+  - pip
+  
+- pip:
+  - albumentations     # augmentation library
+  - opencv-python      # required by albumentations
