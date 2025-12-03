@@ -57,7 +57,7 @@ def build_model(hparams):
     name = cfg["name"]
     ch_in = cfg["in_channels"]
     ch_out = cfg["out_channels"]
-    init_type = cfg.get("init_type", "kaiming")
+    init_type = cfg.get("init_type", None)
 
     # Choose model
     if name == "U_Net":
@@ -77,8 +77,10 @@ def build_model(hparams):
 
     # Optional: initialize weights
     # (Your model file already has init_weights)
-    # from tortoise.model import init_weights
-    # init_weights(model, init_type)
+    
+    if init_type is not None:
+        from tortoise.model import init_weights
+        init_weights(model, init_type)
 
     return model
 
@@ -91,8 +93,8 @@ def build_optimizer(model, hparams):
     opt_cfg = hparams["optimizer"]
     train_cfg = hparams["train"]
 
-    lr = train_cfg["lr"]
-    wd = train_cfg.get("weight_decay", 0.0)
+    lr = float(train_cfg["lr"])
+    wd = float(train_cfg.get("weight_decay", 0.0))
     opt_type = opt_cfg.get("type", "adam")
 
     if opt_type == "adam":
