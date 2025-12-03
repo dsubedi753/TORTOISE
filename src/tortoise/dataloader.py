@@ -56,7 +56,7 @@ def build_dataloaders(
     test_ratio: float | None = None,
     use_rgb: bool = False,
     use_ms: bool = True,
-    num_workers: int = 0,
+    num_workers: int = 4,
 ):
     """
     High-level helper to build train/val/test dataloaders with pre-sampled
