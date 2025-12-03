@@ -1,0 +1,30 @@
+model:
+  name: "U_Net"          # U_Net | R2U_Net | AttU_Net | R2AttU_Net
+  in_channels: 13
+  out_channels: 1
+  init_type: "kaiming"
+
+train:
+  epochs: 10
+  batch_size: 128
+  lr: 1e-3
+  weight_decay: 0.0
+  num_workers: 4
+  amp: true
+  val_every: 1
+
+optimizer:
+  type: "adam"          # adam | adamw | sgd
+  betas: [0.9, 0.999]
+
+dataset:
+  use_ms: true
+  use_rgb: false
+  seed: 42
+  train_ratio: 0.8
+  val_ratio: 0.1
+  test_ratio: 0.1
+
+augment:
+  enabled: true
+  versions_per_tile: 2
