@@ -71,11 +71,11 @@ def _transform_for_name(name: str) -> A.BasicTransform:
     if name == "iscale":
         return IntensityScale(scale_limit=0.1, p=1.0)
     if name == "affine":
-        # Shift, Scale, and Rotate: covers continuous rotation and scale changes
-        return A.ShiftScaleRotate(
-            shift_limit=0.0625, # shift by up to 6.25%
-            scale_limit=0.1,    # scale by +/- 10%
-            rotate_limit=45,    # rotate by +/- 45 degrees
+        # Affine transformation: shift, scale, and rotate
+        return A.Affine(
+            translate_percent=0.0625,  # shift by up to 6.25%
+            scale=(0.9, 1.1),          # scale by 0.9x to 1.1x (+/- 10%)
+            rotate=(-45, 45),          # rotate by +/- 45 degrees
             p=1.0
         )
 
