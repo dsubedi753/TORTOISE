@@ -208,19 +208,18 @@ __marimo__/
 
 
 
-
-### Raw dataset
-data_backup/
-data/tiles/
-
-
-
 ## Experimental Sciripts
 src/tortoise/_exp*
 lukaune/
-data_trial/
-data/tiles.zip
-data/raw/
-data/imageset/
-data/tiles/
-notebooks/Trainin.ipynb
+
+
+# Ignore everything in the data or trial data folder
+data/*
+data*/*
+
+# Don't ignore this specific file
+!data/tile_index.csv
+
+notebooks/
+!notebooks/Example_dataloader.ipynb
+!notebooks/visualizing_augmentations.ipynb
