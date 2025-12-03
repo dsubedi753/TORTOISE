@@ -39,7 +39,7 @@ def split_tile_ids(
 def list_tile_ids(tiles_dir):
     ids = []
     for f in Path(tiles_dir).glob("tile_ms_*.tif"):
-        m = re.match(r"tile_ms_(.+)\.tif", f.name)
+        m = re.match(r"tile_ms_(\d{5})\.tif", f.name)
         if m:
             ids.append(m.group(1)) 
     return sorted(ids)
