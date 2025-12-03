@@ -220,6 +220,6 @@ data*/*
 # Don't ignore this specific file
 !data/tile_index.csv
 
-notebooks/
-!notebooks/Example_dataloader.ipynb
-!notebooks/visualizing_augmentations.ipynb
+notebooks/*
+!notebooks/example_dataloader.ipynb
+!notebooks/visualizing_augmentation.ipynb
