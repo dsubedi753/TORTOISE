@@ -94,19 +94,22 @@ def build_dataloaders(
                                                 )
     
     
-    def sample_augmentations(ids, aug_keys, seed: int = 42):
+    def sample_augmentations(ids, aug_keys=None, seed: int = 42):
         rng = np.random.RandomState(seed)
         out = []
         for tid in ids:
-            augs = rng.choice(aug_keys, size=2, replace=True)
+            if aug_keys is not None:
+                augs = rng.choice(aug_keys, size=2, replace=True)
+            else:
+                augs = []
             for aug in ["orig"] + list(augs):
                 out.append((tid, aug))
         return out
     
     # 3. Expand ids to samples with all versions
     train_samples = sample_augmentations(train_ids, AUG_KEYS, seed=seed)
-    val_samples   = sample_augmentations(val_ids, AUG_KEYS, seed=seed)
-    test_samples  = sample_augmentations(test_ids, AUG_KEYS, seed=seed)
+    val_samples   = sample_augmentations(val_ids, seed=seed)
+    test_samples  = sample_augmentations(test_ids, seed=seed)
 
     # 5. build datasets
     train_ds = TileDataset(
