@@ -3,8 +3,25 @@ import torch.nn as nn
 from tqdm import tqdm
 
 
-#  Loss Components
+# Device management utilities
+def get_device():
+    """Safely select GPU device if available, else CPU."""
+    if torch.cuda.is_available():
+        return torch.device("cuda")
+    else:
+        print("[WARN] CUDA not available; will use CPU. Training will be slow.")
+        return torch.device("cpu")
 
+
+def print_device_info():
+    """Print GPU info for debugging."""
+    if torch.cuda.is_available():
+        print(f"[INFO] CUDA available: {torch.cuda.get_device_name(0)}")
+        print(f"[INFO] GPU memory: {torch.cuda.get_device_properties(0).total_memory / 1e9:.2f} GB")
+    else:
+        print("[INFO] CUDA not available; using CPU")
+
+#  Loss Components
 def dice_loss(logits, targets, mask, eps=1e-6):
     probs = torch.sigmoid(logits)
     probs = probs * mask
@@ -31,8 +48,8 @@ def combined_loss(logits, targets, mask, bce_loss_fn):
     return bce + 0.5 * d_loss
 
 
-def masked_iou(logits, targets, mask, eps=1e-6):
-    preds = (torch.sigmoid(logits) > 0.5).float()
+def masked_iou(logits, targets, mask, threshold = 0.5, eps=1e-6):
+    preds = (torch.sigmoid(logits) > threshold).float()
 
     preds = preds * mask
     targets = targets * mask
@@ -48,7 +65,7 @@ def masked_iou(logits, targets, mask, eps=1e-6):
 
 #  Training Loop
 
-def train_one_epoch(model, loader, optimizer, device, pos_weight, use_amp=True, scaler=None):
+def train_one_epoch(model, loader, optimizer, device, pos_weight, threshold = 0.5, use_amp=True, scaler=None):
     model.train()
     total_loss = 0.0
     total_iou  = 0.0
@@ -64,8 +81,8 @@ def train_one_epoch(model, loader, optimizer, device, pos_weight, use_amp=True, 
 
         optimizer.zero_grad()
 
-        if use_amp:
-            with torch.cuda.amp.autocast():
+        if use_amp and scaler is not None:
+            with torch.amp.autocast('cuda'):
                 logits = model(ms)
                 loss = combined_loss(logits, label, mask, bce_loss_fn)
             scaler.scale(loss).backward()
@@ -78,7 +95,7 @@ def train_one_epoch(model, loader, optimizer, device, pos_weight, use_amp=True, 
             optimizer.step()
 
         # compute IoU for progress monitoring
-        iou_val = masked_iou(logits, label, mask)
+        iou_val = masked_iou(logits, label, mask, threshold)
 
         total_loss += loss.item()
         total_iou  += iou_val.item()
@@ -91,7 +108,7 @@ def train_one_epoch(model, loader, optimizer, device, pos_weight, use_amp=True, 
 #  Evaluation Loop
 
 @torch.no_grad()
-def evaluate(model, loader, device, pos_weight, use_amp=True):
+def evaluate(model, loader, device, pos_weight, threshold = 0.5, use_amp=True):
     model.eval()
     total_loss = 0.0
     total_iou = 0.0
@@ -105,14 +122,14 @@ def evaluate(model, loader, device, pos_weight, use_amp=True):
         mask  = batch["mask"].to(device).float()
 
         if use_amp:
-            with torch.cuda.amp.autocast():
+            with torch.amp.autocast('cuda'):
                 logits = model(ms)
                 loss = combined_loss(logits, label, mask, bce_loss_fn)
         else:
             logits = model(ms)
             loss = combined_loss(logits, label, mask, bce_loss_fn)
 
-        iou_val = masked_iou(logits, label, mask)
+        iou_val = masked_iou(logits, label, mask, threshold)
 
         total_loss += loss.item()
         total_iou  += iou_val.item()
@@ -131,10 +148,12 @@ def train_model(
     device,
     pos_weight,
     num_epochs,
+    threshold = 0.5,
     checkpoint_path = None,
+    scaler = None,
     use_amp=True
 ):
-    scaler = torch.amp.GradScaler() if use_amp else None
+    
 
     best_val_loss = float("inf")
 
@@ -155,6 +174,7 @@ def train_model(
             pos_weight=pos_weight,
             use_amp=use_amp,
             scaler=scaler,
+            threshold=threshold,
         )
 
         # ---- Eval ----
@@ -164,6 +184,7 @@ def train_model(
             device=device,
             pos_weight=pos_weight,
             use_amp=use_amp,
+            threshold=threshold,
         )
 
         # scheduler
