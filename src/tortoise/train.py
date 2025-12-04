@@ -37,7 +37,7 @@ def dice_loss(logits, targets, mask, eps=1e-6):
     return 1 - dice.mean()
 
 
-def combined_loss(logits, targets, mask, bce_loss_fn):
+def combined_loss(logits, targets, mask, bce_loss_fn, alpha = 0.5):
     # BCE (masked)
     bce_raw = bce_loss_fn(logits, targets)             # shape: (B,1,H,W)
     bce     = (bce_raw * mask).sum() / (mask.sum() + 1e-6)
@@ -45,7 +45,7 @@ def combined_loss(logits, targets, mask, bce_loss_fn):
     # Dice
     d_loss = dice_loss(logits, targets, mask)
 
-    return bce + 0.5 * d_loss
+    return (1-alpha)*bce + alpha * d_loss
 
 
 def masked_iou(logits, targets, mask, threshold = 0.5, eps=1e-6):
@@ -65,7 +65,7 @@ def masked_iou(logits, targets, mask, threshold = 0.5, eps=1e-6):
 
 #  Training Loop
 
-def train_one_epoch(model, loader, optimizer, device, pos_weight, threshold = 0.5, use_amp=True, scaler=None):
+def train_one_epoch(model, loader, optimizer, device, pos_weight, threshold = 0.5, alpha = 0.5, use_amp=True, scaler=None):
     model.train()
     total_loss = 0.0
     total_iou  = 0.0
@@ -84,13 +84,13 @@ def train_one_epoch(model, loader, optimizer, device, pos_weight, threshold = 0.
         if use_amp and scaler is not None:
             with torch.amp.autocast('cuda'):
                 logits = model(ms)
-                loss = combined_loss(logits, label, mask, bce_loss_fn)
+                loss = combined_loss(logits, label, mask, bce_loss_fn, alpha = alpha)
             scaler.scale(loss).backward()
             scaler.step(optimizer)
             scaler.update()
         else:
             logits = model(ms)
-            loss = combined_loss(logits, label, mask, bce_loss_fn)
+            loss = combined_loss(logits, label, mask, bce_loss_fn, alpha = alpha)
             loss.backward()
             optimizer.step()
 
@@ -108,7 +108,7 @@ def train_one_epoch(model, loader, optimizer, device, pos_weight, threshold = 0.
 #  Evaluation Loop
 
 @torch.no_grad()
-def evaluate(model, loader, device, pos_weight, threshold = 0.5, use_amp=True):
+def evaluate(model, loader, device, pos_weight, threshold = 0.5, alpha = 0.5, use_amp=True):
     model.eval()
     total_loss = 0.0
     total_iou = 0.0
@@ -124,10 +124,10 @@ def evaluate(model, loader, device, pos_weight, threshold = 0.5, use_amp=True):
         if use_amp:
             with torch.amp.autocast('cuda'):
                 logits = model(ms)
-                loss = combined_loss(logits, label, mask, bce_loss_fn)
+                loss = combined_loss(logits, label, mask, bce_loss_fn, alpha = alpha)
         else:
             logits = model(ms)
-            loss = combined_loss(logits, label, mask, bce_loss_fn)
+            loss = combined_loss(logits, label, mask, bce_loss_fn, alpha = alpha)
 
         iou_val = masked_iou(logits, label, mask, threshold)
 
@@ -149,6 +149,7 @@ def train_model(
     pos_weight,
     num_epochs,
     threshold = 0.5,
+    alpha = 0.5,
     checkpoint_path = None,
     scaler = None,
     use_amp=True
@@ -175,6 +176,7 @@ def train_model(
             use_amp=use_amp,
             scaler=scaler,
             threshold=threshold,
+            alpha = alpha,
         )
 
         # ---- Eval ----
