@@ -64,13 +64,13 @@ def build_model(hparams):
         model = U_Net(img_ch=ch_in, output_ch=ch_out, base=cfg.get("base_channels", 16), depth=cfg.get("depth", 4))
 
     elif name == "R2U_Net":
-        model = R2U_Net(img_ch=ch_in, output_ch=ch_out)
+        model = R2U_Net(img_ch=ch_in, output_ch=ch_out, base=cfg.get("base_channels", 16), depth=cfg.get("depth", 4))
 
     elif name == "AttU_Net":
-        model = AttU_Net(img_ch=ch_in, output_ch=ch_out)
+        model = AttU_Net(img_ch=ch_in, output_ch=ch_out, base=cfg.get("base_channels", 16), depth=cfg.get("depth", 4))
 
     elif name == "R2AttU_Net":
-        model = R2AttU_Net(img_ch=ch_in, output_ch=ch_out)
+        model = R2AttU_Net(img_ch=ch_in, output_ch=ch_out, base=cfg.get("base_channels", 16), depth=cfg.get("depth", 4))
 
     else:
         raise ValueError(f"Unknown model name: {name}")
