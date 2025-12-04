@@ -132,11 +132,13 @@ def train_model(
     pos_weight,
     num_epochs,
     checkpoint_path = None,
-    use_amp=True
+    use_amp=True,
+    early_stopping_patience=None
 ):
     scaler = torch.amp.GradScaler() if use_amp else None
 
     best_val_loss = float("inf")
+    patience_counter = 0
 
     train_losses = []
     val_losses   = []
@@ -168,7 +170,10 @@ def train_model(
 
         # scheduler
         if scheduler is not None:
-            scheduler.step()
+            if isinstance(scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
+                scheduler.step(val_loss)
+            else:
+                scheduler.step()
 
         # record
         train_losses.append(train_loss)
@@ -179,13 +184,19 @@ def train_model(
         print(f"  Train Loss: {train_loss:.6f} | IoU: {train_iou:.4f}")
         print(f"  Val   Loss: {val_loss:.6f} | IoU: {val_iou:.4f}")
 
-        # ---- Checkpoint ----
-        if checkpoint_path is not None:
-            if val_loss < best_val_loss:
-                best_val_loss = val_loss
+        # ---- Checkpoint & Early Stopping ----
+        if val_loss < best_val_loss:
+            best_val_loss = val_loss
+            patience_counter = 0
+            if checkpoint_path is not None:
                 checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
                 torch.save(model.state_dict(), checkpoint_path)
                 print(f"Saved new best model to {checkpoint_path}")
+        else:
+            patience_counter += 1
+            if early_stopping_patience is not None and patience_counter >= early_stopping_patience:
+                print(f"Early stopping triggered after {epoch} epochs.")
+                break
 
     print("\nTraining complete.")
     print(f"Best Val Loss: {best_val_loss:.6f}")
