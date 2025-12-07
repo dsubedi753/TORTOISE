@@ -1,6 +1,19 @@
+import json
+import os
 from matplotlib import pyplot as plt
 import numpy as np
 import torch
+from typing import Optional
+from pathlib import Path
+import torch.nn as nn
+import rasterio
+
+
+PROJECT_FOLDER = Path(os.getenv("PROJECT_ROOT"))
+DATA_FOLDER = PROJECT_FOLDER / "data"
+src_path = PROJECT_FOLDER / "src"
+tiles_dir = DATA_FOLDER / "tiles"
+imageset_dir = DATA_FOLDER / "imageset"
 
 
 def to_display_rgb(tensors_list, channels=(0, 1, 2), rescale=False, aug_names=None, nrows=2, ncols=4):
@@ -85,3 +98,94 @@ def to_display_rgb(tensors_list, channels=(0, 1, 2), rescale=False, aug_names=No
     
     plt.tight_layout()
     return fig, axes
+
+
+
+
+def ensemble_inference(model:nn.Module, image_id: str, use_rgb = False, threshold = 0.5):
+    """Get the tears from the image_id
+
+    Args:
+        image_id (str): _description_
+        use_rgb (bool, optional): _description_. Defaults to False.
+
+    Returns:
+        _type_: _description_
+    """
+    image_id_dir = imageset_dir / image_id
+    
+    meta_file = image_id_dir / "meta.json"
+    
+    if use_rgb:
+        image = image_id_dir / "rgb.png"
+    else:
+        image = image_id_dir / "ms.tif"
+ 
+    with meta_file.open("r") as f:
+        meta = json.load(f)
+        
+    height = int(meta["height"])
+    width = int(meta["width"])
+    tile_size = int(meta["tile_size"])
+
+
+    tiles = meta.get("valid_tiles", [])
+    
+    bsz = len(tiles)
+    channels = 3 if use_rgb else 13
+
+    batch = torch.zeros((bsz, channels, tile_size, tile_size), dtype=torch.float32)
+    batch_masks = torch.zeros((bsz, 1, tile_size, tile_size), dtype=torch.float32)
+    positions: list[tuple[int, int]] = []
+
+    for idx, tile in enumerate(tiles):
+        tid = int(tile["tile_id"])
+        positions.append((int(tile["h0"]), int(tile["w0"])))
+
+        tile_path = tiles_dir / (f"tile_rgb_{tid:05d}.png" if use_rgb else f"tile_ms_{tid:05d}.tif")
+        mask_path = tiles_dir / f"tile_label_{tid:05d}.tif"
+
+        with rasterio.open(tile_path) as src:
+            arr = src.read().astype(np.float32)
+        arr /= 255.0 if use_rgb else 10000.0
+
+        with rasterio.open(mask_path) as src:
+            mask_arr = src.dataset_mask().astype(np.float32) / 255.0
+
+        mask_tensor = torch.from_numpy(mask_arr)
+        batch_masks[idx, 0] = mask_tensor
+        batch[idx] = torch.from_numpy(arr) * mask_tensor.unsqueeze(0)
+
+    device = next(model.parameters()).device
+    model.eval()
+    with torch.no_grad():
+        logits = model(batch.to(device))
+        probs = torch.sigmoid(logits) * batch_masks.to(device)
+
+    probs = probs.squeeze(1).cpu()
+    tile_masks = batch_masks.squeeze(1)
+
+    pred_sum = torch.zeros((height, width), dtype=torch.float32)
+    weight_sum = torch.zeros((height, width), dtype=torch.float32)
+
+    for idx, (h0, w0) in enumerate(positions):
+        h1, w1 = h0 + tile_size, w0 + tile_size
+        pred_sum[h0:h1, w0:w1] += probs[idx] * tile_masks[idx]
+        weight_sum[h0:h1, w0:w1] += tile_masks[idx]
+
+    pred_full = pred_sum / (weight_sum + 1e-6)
+
+    with rasterio.open(image_id_dir / "label.tif") as src:
+        label_full = torch.from_numpy(src.read(1).astype(np.float32)) / 65535.0
+        label_mask = torch.from_numpy(src.dataset_mask().astype(np.float32)) / 255.0
+
+    pred_full = pred_full * label_mask
+    label_full = label_full * label_mask
+
+    pred_binary = (pred_full > threshold).float()
+
+    inter = (pred_binary * label_full).sum()
+    union = pred_binary.sum() + label_full.sum() - inter
+    iou = (inter / (union + 1e-6)).item()
+
+    return pred_full, image, iou

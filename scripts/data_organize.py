@@ -10,12 +10,8 @@ import re
 import shutil
 from pathlib import Path
 
-# ============================
-# User-configurable paths
-# ============================
 
 
-# Replace this with wherever you have your raw data
 root = Path(os.getenv("PROJECT_ROOT"))  
 DATA_FOLDER = root / "data" 
 RAW_DATA_FOLDER = DATA_FOLDER / "raw"
@@ -32,10 +28,8 @@ os.makedirs(OUTPUT_DATASET, exist_ok=True)
 # Regex to extract 3-digit ID
 ID_REGEX = re.compile(r"(\d{3})")
 
-# ============================
-# Helper: extract ID from filename
-# ============================
 
+# Helper: extract ID from filename
 def extract_id(filename):
     match = ID_REGEX.search(filename)
     if match:
@@ -43,10 +37,7 @@ def extract_id(filename):
     return None  # File not valid
 
 
-# ============================
 # Process folders
-# ============================
-
 def process_folder(src_folder, name_in_output):
     """
     src_folder: TRAINING_IMAGE_FOLDER or SEGMENTATION_FOLDER etc.
@@ -74,10 +65,8 @@ def process_folder(src_folder, name_in_output):
         shutil.copy2(fpath, out_path)
 
 
-# ============================
-# Perform reorganization
-# ============================
 
+# Perform reorganization
 print("Processing multispectral files...")
 process_folder(TRAINING_IMAGE_FOLDER, "ms.tif")
 

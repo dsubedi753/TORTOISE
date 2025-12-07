@@ -34,10 +34,8 @@ import re
 
 
 
-# ============================================================================
-# === Parameter Validation ===================================================
-# ============================================================================
 
+# Parameter Validation
 def assert_params(tile_size, stride):
     #Allowed parameter sets
 
@@ -45,29 +43,24 @@ def assert_params(tile_size, stride):
     ALLOWED_STRIDES    = {8, 12, 16, 18, 24, 48}
     """Validate tile_size and stride with auto-derived compatibility rules."""
 
-    # 1. tile_size allowed
     if tile_size not in ALLOWED_TILE_SIZES:
         raise ValueError(
             f"Invalid tile_size={tile_size}. Allowed: {sorted(ALLOWED_TILE_SIZES)}"
         )
 
-    # 2. stride allowed
     if stride not in ALLOWED_STRIDES:
         raise ValueError(
             f"Invalid stride={stride}. Allowed: {sorted(ALLOWED_STRIDES)}"
         )
 
-    # 3. positive stride
     if stride <= 0:
         raise ValueError("stride must be > 0.")
 
-    # 4. no gaps: stride < tile_size
     if stride >= tile_size:
         raise ValueError(
             f"stride={stride} must be < tile_size={tile_size}"
         )
 
-    # 5. compatibility rule: (48 - tile_size) % stride == 0
     mask_gap = 48 - tile_size
     if mask_gap % stride != 0:
         raise ValueError(
@@ -76,19 +69,13 @@ def assert_params(tile_size, stride):
         )
 
 
-# ============================================================================
-# === Config Loading =========================================================
-# ============================================================================
-
+#Config Loading
 def load_config(path):
     with open(path, "r") as f:
         return yaml.safe_load(f)
 
 
-# ============================================================================
-# === Folder Scanning ========================================================
-# ============================================================================
-
+# Folder Scanning
 def find_image_folders(imageset_root):
     """
     Return sorted list of valid image ID folders (3-digit names).
@@ -104,10 +91,8 @@ def find_image_folders(imageset_root):
     return sorted(folders)
 
 
-# ============================================================================
-# === Mask Reading ===========================================================
-# ============================================================================
 
+# Mask Reading
 def read_mask(ms_path):
     """
     Read mask and return:
@@ -121,10 +106,7 @@ def read_mask(ms_path):
     return mask, H, W
 
 
-# ============================================================================
-# === Global Sliding Tile Generation ========================================
-# ============================================================================
-
+# Global Sliding Tile Generation
 def generate_global_tiles(H, W, tile_size, stride):
     """
     Generate all (y, x) top-left coordinates of tiles for sliding window.
@@ -134,10 +116,7 @@ def generate_global_tiles(H, W, tile_size, stride):
             yield (y, x)
 
 
-# ============================================================================
-# === Tile Validity Check ====================================================
-# ============================================================================
-
+# Tile Validity Check 
 def is_tile_valid(mask, y, x, tile_size, threshold):
     """
     Valid if fraction of mask==255 pixels in tile >= threshold.
@@ -148,13 +127,11 @@ def is_tile_valid(mask, y, x, tile_size, threshold):
     return valid_ratio >= threshold
 
 
-# ============================================================================
-# === Atomic JSON Writing ====================================================
-# ============================================================================
 
+# Atomic JSON Writing
 def write_meta_json(folder, meta):
     """
-    Write meta.json atomically: meta.json.tmp → meta.json
+    Write meta.json : meta.json.tmp to meta.json
     """
     tmp_path = os.path.join(folder, "meta.json.tmp")
     final_path = os.path.join(folder, "meta.json")
@@ -165,10 +142,7 @@ def write_meta_json(folder, meta):
     os.replace(tmp_path, final_path)
 
 
-# ============================================================================
-# === Main Tiling Logic ======================================================
-# ============================================================================
-
+# Main Tiling Logic 
 def tilify(dataset_root, tile_size, stride, threshold):
     """
     Process all images in dataset_root:
@@ -200,10 +174,10 @@ def tilify(dataset_root, tile_size, stride, threshold):
 
             print(f"\nProcessing image {image_id} ...")
 
-            # 1. Read mask
+            # Read mask
             mask, H, W = read_mask(ms_path)
 
-            # 2. Generate sliding tiles
+            # Generate sliding tiles
             valid_tiles = []
 
             for (y, x) in generate_global_tiles(H, W, tile_size, stride):
@@ -232,7 +206,7 @@ def tilify(dataset_root, tile_size, stride, threshold):
 
                     global_tile_id += 1
 
-            # 3. Write meta.json
+            # Write meta.json
             meta = {
                 "id": image_id,
                 "height": H,
@@ -246,18 +220,12 @@ def tilify(dataset_root, tile_size, stride, threshold):
 
             write_meta_json(folder, meta)
 
-    # Atomic final rename
     os.replace(tile_index_tmp, tile_index_final)
 
     print("\n====================================================")
     print(f"Tiling complete. {global_tile_id} tiles created.")
     print(f"tile_index.csv written to: {tile_index_final}")
     print("====================================================")
-
-
-# ============================================================================
-# === Public API =============================================================
-# ============================================================================
 
 def run_tilify(config_file, dataset_folder):
     """
@@ -286,11 +254,6 @@ def run_tilify(config_file, dataset_folder):
     # Run
     tilify(dataset_root, tile_size, stride, threshold)
 
-
-# ============================================================================
-# === Local Execution ========================================================
-# ============================================================================
-    
 
 if __name__ == "__main__":   
     root = Path(os.getenv("PROJECT_ROOT"))   # project root

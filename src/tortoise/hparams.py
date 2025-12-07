@@ -75,8 +75,7 @@ def build_model(hparams):
     else:
         raise ValueError(f"Unknown model name: {name}")
 
-    # Optional: initialize weights
-    # (Your model file already has init_weights)
+
     
     if init_type is not None:
         from tortoise.model import init_weights
