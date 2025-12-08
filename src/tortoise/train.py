@@ -189,6 +189,7 @@ def train_model(
             pos_weight=pos_weight,
             use_amp=use_amp,
             threshold=threshold,
+            alpha=alpha,
         )
 
         # scheduler
