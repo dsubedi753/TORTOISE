@@ -6,6 +6,7 @@ import torch
 from typing import Optional
 from pathlib import Path
 import rasterio
+import torch.nn as nn
 
 import torch.nn.functional as F
 
