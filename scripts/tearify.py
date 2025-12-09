@@ -61,7 +61,7 @@ def tearify(dataset_root: Path):
             tile_id = int(row["tile_id"])
             image_id = row["image_id"]
 
-            # Read coordinates and size from CSV (even if currently always 48x48)
+            # Read coordinates and size from CSV
             h0 = int(row["h0"])
             w0 = int(row["w0"])
             height = int(row["height"])
@@ -80,7 +80,7 @@ def tearify(dataset_root: Path):
             rgb_dst = tiles_root / f"tile_rgb_{tile_tag}.png"
             label_dst = tiles_root / f"tile_label_{tile_tag}.tif"
 
-            print(f"[{i}] image_id={image_id}, tile_id={tile_id} → {tile_tag}")
+            print(f"[{i}] image_id={image_id}, tile_id={tile_id} -> {tile_tag}")
 
             # MS tile
             extract_window(ms_src, window, ms_dst)

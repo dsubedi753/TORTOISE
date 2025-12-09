@@ -5,18 +5,7 @@ Created on Thu Nov 20 01:03:00 2025
 @author: Divas
 @program: tilify.py
 
-Full implementation of global sliding-window tiling:
-    - Freestyle mask (no block structure)
-    - Global sliding tiles over whole image
-    - Valid tile if mask ratio >= threshold
-    - Strict tile_size + stride compatibility:
-        (48 - tile_size) % stride == 0
-        stride < tile_size
-        stride ∈ ALLOWED_STRIDES
-        tile_size ∈ ALLOWED_TILE_SIZES
-    - Writes global tile_index.csv
-    - Writes per-image meta.json
-    - Public API: run_tilify(config_file, dataset_folder)
+Stages tiling using config.yml
 """
 
 from pathlib import Path
@@ -39,8 +28,8 @@ import re
 def assert_params(tile_size, stride):
     #Allowed parameter sets
 
-    ALLOWED_TILE_SIZES = {16, 24, 32, 36, 48, 96}
-    ALLOWED_STRIDES    = {8, 12, 16, 18, 24, 48}
+    ALLOWED_TILE_SIZES = {16, 24, 36, 48, 96}
+    ALLOWED_STRIDES    = {8, 12, 16, 24, 48}
     """Validate tile_size and stride with auto-derived compatibility rules."""
 
     if tile_size not in ALLOWED_TILE_SIZES:
@@ -61,6 +50,7 @@ def assert_params(tile_size, stride):
             f"stride={stride} must be < tile_size={tile_size}"
         )
 
+    # All images are multiple of 48 x 48 blocks. Making sure that stride doesn't go out of bound.
     mask_gap = 48 - tile_size
     if mask_gap % stride != 0:
         raise ValueError(
@@ -96,7 +86,7 @@ def find_image_folders(imageset_root):
 def read_mask(ms_path):
     """
     Read mask and return:
-        mask   (H×W uint8, values 0 or 255)
+        mask 
         H
         W
     """
@@ -120,7 +110,7 @@ def generate_global_tiles(H, W, tile_size, stride):
 def is_tile_valid(mask, y, x, tile_size, threshold):
     """
     Valid if fraction of mask==255 pixels in tile >= threshold.
-    threshold ∈ [0,1]
+    threshold in [0,1]
     """
     tile = mask[y:y+tile_size, x:x+tile_size]
     valid_ratio = tile.mean() / 255.0
@@ -256,8 +246,8 @@ def run_tilify(config_file, dataset_folder):
 
 
 if __name__ == "__main__":   
-    root = Path(os.getenv("PROJECT_ROOT"))   # project root
+    root = Path(os.getenv("PROJECT_ROOT"))   
     config_file = root / "configs" / "config.yml"
-    dataset_folder = root / "data"  # data folder
+    dataset_folder = root / "data"  
      
     run_tilify(config_file, dataset_folder)
