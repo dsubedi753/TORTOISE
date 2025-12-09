@@ -37,6 +37,7 @@ class conv_block(nn.Module):
             nn.ReLU(inplace=True),
             nn.Conv2d(ch_out, ch_out, kernel_size=3, stride=1, padding=1, bias=True),
             nn.BatchNorm2d(ch_out),
+            nn.Dropout2d(p=0.1),
             nn.ReLU(inplace=True),
         )
 
@@ -135,15 +136,24 @@ class Attention_block(nn.Module):
 
 
 class U_Net(nn.Module):
-    def __init__(self, img_ch=13, output_ch=1, base=16, depth=4):
+    def __init__(self, cfg = None):
         super().__init__()
+
+        img_ch =  int(cfg.get("in_channels",13))
+        output_ch = int(cfg.get("out_channels",1))
+
+        base=int(cfg.get("base_channels", 16))
+        depth=int(cfg.get("depth", 4))
+        growth = float(cfg.get("growth", 2))
+
+
 
         assert depth >= 2, "depth must be at least 2"
 
         self.depth = depth
         self.pool = nn.MaxPool2d(kernel_size=2, stride=2)
 
-        channels = [base * (2 ** i) for i in range(depth)]
+        channels = [int(base * (growth ** i)) for i in range(depth)]
         self.enc_blocks = nn.ModuleList()
         in_ch = img_ch
         for ch in channels:
@@ -176,15 +186,22 @@ class U_Net(nn.Module):
 
 
 class R2U_Net(nn.Module):
-    def __init__(self, img_ch=13, output_ch=1, t=2, base=16, depth=4):
+    def __init__(self, cfg = None):
         super().__init__()
+
+        img_ch =  cfg.get("in_channels",13)
+        output_ch = cfg.get("out_channels",1)
+
+        base=cfg.get("base_channels", 16), 
+        depth=cfg.get("depth", 4)
+        growth = cfg.get("growth", 2)
 
         assert depth >= 2, "depth must be at least 2"
 
         self.depth = depth
         self.pool = nn.MaxPool2d(kernel_size=2, stride=2)
 
-        channels = [base * (2 ** i) for i in range(depth)]
+        channels = [int(base * (growth ** i)) for i in range(depth)]
         self.enc_blocks = nn.ModuleList()
         in_ch = img_ch
         for ch in channels:
@@ -217,15 +234,22 @@ class R2U_Net(nn.Module):
 
 
 class AttU_Net(nn.Module):
-    def __init__(self, img_ch=13, output_ch=1, base=16, depth=4):
+    def __init__(self, cfg = None):
         super().__init__()
+
+        img_ch =  int(cfg.get("in_channels",13))
+        output_ch = int(cfg.get("out_channels",1))
+
+        base=int(cfg.get("base_channels", 16))
+        depth=int(cfg.get("depth", 4))
+        growth = float(cfg.get("growth", 2))
 
         assert depth >= 2, "depth must be at least 2"
 
         self.depth = depth
         self.pool = nn.MaxPool2d(kernel_size=2, stride=2)
 
-        channels = [base * (2 ** i) for i in range(depth)]
+        channels = [int(base * (growth ** i)) for i in range(depth)]
         self.enc_blocks = nn.ModuleList()
         in_ch = img_ch
         for ch in channels:
@@ -263,15 +287,22 @@ class AttU_Net(nn.Module):
 
 
 class R2AttU_Net(nn.Module):
-    def __init__(self, img_ch=13, output_ch=1, t=2, base=16, depth=4):
+    def __init__(self, cfg = None):
         super().__init__()
+
+        img_ch =  cfg.get("in_channels",13)
+        output_ch = cfg.get("out_channels",1)
+
+        base=cfg.get("base_channels", 16), 
+        depth=cfg.get("depth", 4)
+        growth = cfg.get("growth", 2)
 
         assert depth >= 2, "depth must be at least 2"
 
         self.depth = depth
         self.pool = nn.MaxPool2d(kernel_size=2, stride=2)
 
-        channels = [base * (2 ** i) for i in range(depth)]
+        channels = [int(base * (growth ** i)) for i in range(depth)]
         self.enc_blocks = nn.ModuleList()
         in_ch = img_ch
         for ch in channels:

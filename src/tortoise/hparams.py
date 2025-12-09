@@ -2,17 +2,6 @@
 """
 Hyperparameter loading + model/optimizer builders for TORTOISE.
 
-This file centralizes:
-    - YAML hyperparameter loading
-    - Model construction (U-Net variants)
-    - Optimizer construction
-
-Usage in notebooks:
-    from tortoise.hparams import load_hparams, build_model, build_optimizer
-
-    hparams = load_hparams()
-    model = build_model(hparams).to(device)
-    optimizer = build_optimizer(model, hparams)
 """
 
 import yaml
@@ -55,22 +44,20 @@ def build_model(hparams):
     """
     cfg = hparams["model"]
     name = cfg["name"]
-    ch_in = cfg["in_channels"]
-    ch_out = cfg["out_channels"]
     init_type = cfg.get("init_type", None)
 
     # Choose model
     if name == "U_Net":
-        model = U_Net(img_ch=ch_in, output_ch=ch_out, base=cfg.get("base_channels", 16), depth=cfg.get("depth", 4))
+        model = U_Net( cfg = cfg)
 
     elif name == "R2U_Net":
-        model = R2U_Net(img_ch=ch_in, output_ch=ch_out, base=cfg.get("base_channels", 16), depth=cfg.get("depth", 4))
+        model = R2U_Net(cfg = cfg)
 
     elif name == "AttU_Net":
-        model = AttU_Net(img_ch=ch_in, output_ch=ch_out, base=cfg.get("base_channels", 16), depth=cfg.get("depth", 4))
+        model = AttU_Net( cfg = cfg)
 
     elif name == "R2AttU_Net":
-        model = R2AttU_Net(img_ch=ch_in, output_ch=ch_out, base=cfg.get("base_channels", 16), depth=cfg.get("depth", 4))
+        model = R2AttU_Net(cfg = cfg)
 
     else:
         raise ValueError(f"Unknown model name: {name}")
