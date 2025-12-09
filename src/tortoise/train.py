@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 from tqdm import tqdm
+from pathlib import Path
 
 
 # Device management utilities
@@ -24,8 +25,6 @@ def print_device_info():
 #  Loss Components
 def dice_loss(logits, targets, mask, eps=1e-6):
     probs = torch.sigmoid(logits)
-    probs = probs * mask
-    targets = targets * mask
 
     p = probs.view(probs.size(0), -1)
     t = targets.view(targets.size(0), -1)
@@ -106,15 +105,14 @@ def train_one_epoch(model, loader, optimizer, device, pos_weight, threshold = 0.
 
 
 #  Evaluation Loop
-
 @torch.no_grad()
-def evaluate(model, loader, device, pos_weight, threshold = 0.5, alpha = 0.5, use_amp=True):
+def evaluate(model, loader, device, threshold = 0.5, alpha = 0.5, use_amp=True):
     model.eval()
     total_loss = 0.0
     total_iou = 0.0
     count = 0
 
-    bce_loss_fn = nn.BCEWithLogitsLoss(pos_weight=pos_weight, reduction="none")
+    bce_loss_fn = nn.BCEWithLogitsLoss(reduction="none")
 
     for batch in tqdm(loader, desc="Eval", leave=False):
         ms    = batch["ms"].to(device)
@@ -168,7 +166,7 @@ def train_model(
     for epoch in range(1, num_epochs + 1):
         print(f"\nEpoch {epoch}/{num_epochs}")
 
-        # ---- Train ----
+        #Train 
         train_loss, train_iou = train_one_epoch(
             model=model,
             loader=train_loader,
@@ -181,12 +179,11 @@ def train_model(
             alpha = alpha,
         )
 
-        # ---- Eval ----
+        #  Eval 
         val_loss, val_iou = evaluate(
             model=model,
             loader=val_loader,
             device=device,
-            pos_weight=pos_weight,
             use_amp=use_amp,
             threshold=threshold,
             alpha=alpha,
@@ -208,6 +205,8 @@ def train_model(
         print(f"  Train Loss: {train_loss:.6f} | IoU: {train_iou:.4f}")
         print(f"  Val   Loss: {val_loss:.6f} | IoU: {val_iou:.4f}")
 
+        torch.save(model.state_dict(), Path("/content/workspace/TORTOISE/checkpoints/latest.pth"))
+        print(f"Saved new best model to /content/workspace/TORTOISE/checkpoints/latest.pth")
         # ---- Checkpoint & Early Stopping ----
         if val_loss < best_val_loss:
             best_val_loss = val_loss
@@ -221,6 +220,7 @@ def train_model(
             if early_stopping_patience is not None and patience_counter >= early_stopping_patience:
                 print(f"Early stopping triggered after {epoch} epochs.")
                 break
+
 
     print("\nTraining complete.")
     print(f"Best Val Loss: {best_val_loss:.6f}")
