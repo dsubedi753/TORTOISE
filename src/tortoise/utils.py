@@ -18,14 +18,12 @@ tiles_dir = DATA_FOLDER / "tiles"
 imageset_dir = DATA_FOLDER / "imageset"
 
 
-def _binary_boundary(mask: torch.Tensor, dilation_ratio=0.02):
+def _binary_boundary(mask: torch.Tensor, dilation_pixel=2):
     """
     Extract thin binary boundary from a binary mask using Laplacian.
     mask: (H, W) binary {0,1}
     """
-    H, W = mask.shape
-    diag = (H**2 + W**2) ** 0.5
-    dilation = max(1, int(dilation_ratio * diag))
+    dilation = dilation_pixel
 
     lap = torch.tensor([[0, 1, 0],
                         [1,-4, 1],
