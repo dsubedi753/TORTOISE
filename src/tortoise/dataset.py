@@ -4,7 +4,7 @@ from torch.utils.data import Dataset
 from pathlib import Path
 import rasterio
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple, Union
-from tortoise.augmentations import apply_augmentation # new
+from tortoise.augmentations import apply_augmentation 
 
 
 
@@ -14,10 +14,6 @@ class TileDataset(Dataset):
         tile_ms_<ID>.tif      (13 bands)
         tile_rgb_<ID>.png     (3 band RGB)
         tile_label_<ID>.tif   (label mask)
-
-    New behavior:
-        - Indexes samples as (tile_id, version), where version in {"orig", "aug1", "aug2"}
-        - If version != "orig" and aug_map is provided, applies a pre-chosen augmentation.
     """
 
     def __init__(
@@ -32,8 +28,6 @@ class TileDataset(Dataset):
         self.use_rgb = use_rgb
 
 
-        
-        # Normalize tile_ids → List[(tid, version)]
         samples: List[Tuple[str, Optional[str]]] = []
         for item in tile_ids:
             if isinstance(item, tuple):
@@ -85,23 +79,23 @@ class TileDataset(Dataset):
         tid, version = self.samples[index]
 
 
-        if self.use_ms:                                                     # Load MS if requested
+        if self.use_ms:                                                     
             image = self._read_raster(self.ms_paths[tid]).float()/10000.0   # (13,H,W)
-        elif self.use_rgb:                                                  # Load RGB if requested
+        elif self.use_rgb:                                                  
             image = self._read_raster(self.rgb_paths[tid]).float()/255.0    # (3,H,W)
         else:
             raise RuntimeError("Neither MS nor RGB is enabled in dataset.")
         
-        # --- valid mask
+        # valid mask
         mask = self._read_mask(self.label_paths[tid]).float() / 255.0   # (H,W)
 
-        # --- label
+        # label
         label = self._read_raster(self.label_paths[tid]).float() / 65535.0  # (H,W)
         if label.ndim == 2:
             label = label.unsqueeze(0)  # (1,H,W)
 
         if version != "orig":
-            # Prepare numpy versions (convert CHW → HWC)
+            # Prepare numpy versions (convert CHW to HWC)
             image_np = image.permute(1, 2, 0).cpu().numpy()   # (H,W,C)
             label_np = label[0].cpu().numpy() if label is not None else None
             mask_np  = mask.cpu().numpy() if mask is not None else None
