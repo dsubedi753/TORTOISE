@@ -33,3 +33,7 @@ from tortoise.dataset import TileDataset
 ## Augmentations
 
 The project uses Albumentations for image augmentations (geometric and photometric transforms). See the `docs/ALBUMENTATIONS.md` file for details about supported transforms, how they are pre-sampled using AUG_MAP, how to reproduce augmentations, and how to add new transforms.
+
+## SAM 2
+
+Code for training a finetuned SAM2 model is in the notebooks/ folder. SAM2FinetuneNew finetunes a SAM2 model. SAM2FT_Validate calculates performance metrics based off of generated finetuned models using a tiling approach.
