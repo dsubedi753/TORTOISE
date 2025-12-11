@@ -1,39 +1,64 @@
 # Tortoise Dataset
 
-A PyTorch dataset for working with tiled geospatial data.
+This project detects small scale gold mining in satellite images of Amazon basin. It uses Sentinel-2 multispectral data that is tiled, normalized, and labeled through a full preprocessing pipeline. Models include Attention U-Net and SAM2.
 
-## Environment Setup
+## Repo Layout
+- `src/tortoise/` – core code: datasets/dataloaders, augmentations, U-Net family (`U_Net`, `AttU_Net`, etc.), training loop, metrics/inference utilities.
+- `configs/` – `config.yml` (tiling params), `hyperparams.yml` (model/optimizer/dataset settings).
+- `scripts/` – data prep: `data_organize.py`, `tilify.py`, `tearify.py`.
+- `notebooks/` – exploratory work (includes SAM2 finetuning notebooks).
 
-Create the conda environment from the provided configuration:
-
+## Setup
 ```bash
 conda env create -f environment.yml
 conda activate tortoise
+# Point code to the repo root (needed by scripts/utils)
+# Linux/macOS: export PROJECT_ROOT=$(pwd)
+# Windows PS:  $env:PROJECT_ROOT = (Get-Location).Path
 ```
 
-## Preprocessing
+## Data Preparation
+Assumes raw files under `data/raw/`:
+- Multispectral: `data/raw/training_images_masked/`
+- Labels: `data/raw/segmentations_masked/`
+- RGB: `data/raw/training_images_RGBs/`
 
-**Important:** You must run these two scripts in order before using the dataset:
+You must run these three scripts in order before using the dataset:
 
 1. **`data_organize`** – Organizes raw data files into the required directory structure
-2. **`tilify`** – Processes the organized data and generates `tile_index.csv`
+```bash
+python scripts/data_organize.py
+```
+2. **`tilify`** – Processes the organized data and generates `tile_index.csv` and `meta.json`
+```bash
+python scripts/tilify.py
+```
+3. **`tearify`** - Uses `tile_index.csv` to extract the tiles and store in file system
+```bash
+python scripts/tearify.py
+```
 
 **The dataset will not load if these preprocessing steps are skipped.** The `tile_index.csv` file is required for the dataset to function.
 
 ## After Preprocessing
 
-Once preprocessing is complete, you can load the dataset:
-
-```python
-from tortoise.dataset import TileDataset
-```
+Once preprocessing is complete, you can load the dataset: using `TileDataSet` and `DataLoader` . This processes is demonstrated in `notebooks/example_dataloader.ipynb`. Training example for U-Net is shown in `notebooks/example_U-Net_training.ipynb`
 
 # TORTOISE
 
-## Augmentations
+## U-Net
 
-The project uses Albumentations for image augmentations (geometric and photometric transforms). See the `docs/ALBUMENTATIONS.md` file for details about supported transforms, how they are pre-sampled using AUG_MAP, how to reproduce augmentations, and how to add new transforms.
+U-Net models are adapted from [attention_unet by sfczekalski](https://github.com/sfczekalski/attention_unet). There are two major changes.
+- Parameterization of base channel width, depth, and growth factor (scaling factor that scales up number of channel)
+- Randomized spatial dropout inside each convolutional block
 
 ## SAM 2
 
 Code for training a finetuned SAM2 model is in the notebooks/ folder. SAM2FinetuneNew finetunes a SAM2 model. SAM2FT_Validate calculates performance metrics based off of generated finetuned models using a tiling approach.
+
+
+
+## Evaluation / Inference
+- Tile-wise evaluation: `tortoise.train.evaluate(...)`
+- Whole-image fusion + metrics: `tortoise.utils.ensemble_image` and `evaluate_images`
+- Visualization helpers: `tortoise.utils.to_display_rgb`

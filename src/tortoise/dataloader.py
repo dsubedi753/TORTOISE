@@ -116,18 +116,6 @@ def build_dataloaders(
     augmentations.
 
     csv_file: the location of tiles_index.csv
-
-    Steps:
-        1. List tile_ids from tiles_dir.
-        2. Build full sample list: (tid, "orig"), (tid, "aug1"), (tid, "aug2").
-        3. Pre-sample AUG_MAP for all (tid, "aug1"/"aug2").
-        4. Split the tile_ids into train/val/test.
-        5. Create TileDataset instances with the sample lists and AUG_MAP.
-
-    Note:
-        - Total number of samples across all splits ~= N_tiles * 3.
-        - Each (tile_id, version) is split independently; a given tile_id may
-          have 0, 1, 2, or 3 versions in any particular split.
     """
     
     if use_rgb == use_ms:
@@ -135,12 +123,12 @@ def build_dataloaders(
 
     tiles_dir = Path(tiles_dir)
 
-    # 1. discover tile_ids
+    # discover tile_ids
     tile_ids_map = list_tile_ids(tiles_dir, Path(csv_file))
     
 
 
-    # 2. split ids into train/val/test
+    # split ids into train/val/test
     train_ids, val_ids, test_ids, image_map_tuple = split_tile_ids(tile_ids_map,
                                                     seed=seed,
                                                     train_ratio=train_ratio,
@@ -161,12 +149,12 @@ def build_dataloaders(
                 out.append((tid, aug))
         return out
     
-    # 3. Expand ids to samples with all versions
+    # Expand ids to samples with all versions
     train_samples = sample_augmentations(train_ids, AUG_KEYS, seed=seed)
     val_samples   = sample_augmentations(val_ids, seed=seed)
     test_samples  = sample_augmentations(test_ids, seed=seed)
 
-    # 5. build datasets
+    # build datasets
     train_ds = TileDataset(
         tiles_dir=tiles_dir,
         tile_ids=train_samples,
@@ -189,7 +177,7 @@ def build_dataloaders(
         use_rgb=use_rgb,
     )
 
-    # 6. build dataloaders
+    # build dataloaders
     pin = torch.cuda.is_available()
 
     train_loader = DataLoader(

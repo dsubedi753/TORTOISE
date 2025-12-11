@@ -208,10 +208,6 @@ __marimo__/
 
 
 
-## Experimental Sciripts
-src/tortoise/_exp*
-lukaune/
-
 
 # Ignore everything in the data or trial data folder
 data/*
@@ -219,7 +215,3 @@ data*/*
 
 # Don't ignore this specific file
 !data/tile_index.csv
-
-notebooks/*
-!notebooks/example_dataloader.ipynb
-!notebooks/visualizing_augmentation.ipynb
