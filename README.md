@@ -6,7 +6,7 @@ This project detects small scale gold mining in satellite images of Amazon basin
 - `src/tortoise/` – core code: datasets/dataloaders, augmentations, U-Net family (`U_Net`, `AttU_Net`, etc.), training loop, metrics/inference utilities.
 - `configs/` – `config.yml` (tiling params), `hyperparams.yml` (model/optimizer/dataset settings).
 - `scripts/` – data prep: `data_organize.py`, `tilify.py`, `tearify.py`.
-- `notebooks/` – exploratory work (includes SAM2 finetuning notebooks).
+- `notebooks/` – SAM2 finetuning notebooks and miscellaneous exploratory work
 
 ## Setup
 ```bash
@@ -52,11 +52,12 @@ U-Net models are adapted from [attention_unet by sfczekalski](https://github.com
 - Parameterization of base channel width, depth, and growth factor (scaling factor that scales up number of channel)
 - Randomized spatial dropout inside each convolutional block
 
-## SAM 2
+## SAM 2 Notebooks
 
-Code for training a finetuned SAM2 model is in the notebooks/ folder. SAM2FinetuneNew finetunes a SAM2 model. SAM2FT_Validate calculates performance metrics based off of generated finetuned models using a tiling approach.
-
-
+Code for training a finetuned SAM2 model is in the notebooks/ folder. 
+* SAM2FinetuneNew finetunes a SAM2 model.
+* SAM2FT_Validate calculates performance metrics based off of generated finetuned models using a tiling approach.
+* DL_Zero_Shot calculates performance metrics based off of generated finetuned models using full images, without tiling.
 
 ## Evaluation / Inference
 - Tile-wise evaluation: `tortoise.train.evaluate(...)`
