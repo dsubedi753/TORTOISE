@@ -42,15 +42,17 @@ python scripts/tearify.py
 
 ## After Preprocessing
 
-Once preprocessing is complete, you can load the dataset: using `TileDataSet` and `DataLoader` . This processes is demonstrated in `notebooks/example_dataloader.ipynb`. Training example for U-Net is shown in `notebooks/example_U-Net_training.ipynb`
-
-# TORTOISE
+Once preprocessing is complete, you can load the dataset: using `TileDataSet` and `DataLoader` . This processes is demonstrated in `notebooks/example_dataloader.ipynb`. 
 
 ## U-Net
 
 U-Net models are adapted from [attention_unet by sfczekalski](https://github.com/sfczekalski/attention_unet). There are two major changes.
 - Parameterization of base channel width, depth, and growth factor (scaling factor that scales up number of channel)
 - Randomized spatial dropout inside each convolutional block
+
+Training example for U-Net is shown in `notebooks/example_U-Net_training.ipynb`
+
+# TORTOISE
 
 ## SAM 2 Notebooks
 
