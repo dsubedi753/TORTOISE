@@ -9,8 +9,8 @@ This project does **fine grained segmentation of artisinal gold mines** from sat
 </figure>
 
 
-## Using the SAM2 Model
-To run inference:
+## Generating Mining Masks with the SAM2 Model
+To run inference (generate labels/masks for mines):
 1. Download the trained SAM2 model [here](https://drive.google.com/file/d/1xJJroc2gxaaRAsTBMwGt2_Y9ywa4ZRFw/view?usp=sharing).
 2. Set up your data with the following folder structure: 
 ```
